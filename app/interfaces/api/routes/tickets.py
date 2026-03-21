@@ -1,4 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 from app.application.use_cases.get_ticket import GetTicketUseCase
 from app.application.use_cases.list_tickets import ListTicketsUseCase
@@ -6,7 +9,8 @@ from app.application.use_cases.review_triage_decision import ReviewTriageDecisio
 from app.application.use_cases.save_triage_decision import SaveTriageDecisionUseCase
 from app.application.use_cases.triage_ticket import TriageTicketUseCase
 from app.infrastructure.ai.baseline_classifier import BaselineClassifier
-from app.interfaces.api.dependencies import get_repository
+from app.infrastructure.persistence.sqlite_ticket_repository import SQLiteTicketRepository
+from app.interfaces.api.dependencies import get_db_session, get_ticket_repository
 from app.interfaces.api.schemas.ticket_schemas import (
     TicketCreateRequest,
     TicketRecordResponse,
@@ -61,9 +65,23 @@ def _to_ticket_record_response(record) -> TicketRecordResponse:
     )
 
 
+DbSession = Annotated[Session, Depends(get_db_session)]
+
+
+def repository_dependency(
+    session: DbSession,
+) -> SQLiteTicketRepository:
+    return get_ticket_repository(session)
+
+
+TicketRepositoryDep = Annotated[SQLiteTicketRepository, Depends(repository_dependency)]
+
+
 @router.post("/triage", response_model=TriageResponse)
-def triage_ticket(request: TicketCreateRequest) -> TriageResponse:
-    repository = get_repository()
+def triage_ticket(
+    request: TicketCreateRequest,
+    repository: TicketRepositoryDep,
+) -> TriageResponse:
     ticket = to_domain_ticket(request)
 
     use_case = TriageTicketUseCase(
@@ -83,8 +101,10 @@ def triage_ticket(request: TicketCreateRequest) -> TriageResponse:
 
 
 @router.post("/decision", response_model=TriageDecisionResponse)
-def review_triage_decision(request: TriageDecisionRequest) -> TriageDecisionResponse:
-    repository = get_repository()
+def review_triage_decision(
+    request: TriageDecisionRequest,
+    repository: TicketRepositoryDep,
+) -> TriageDecisionResponse:
     get_use_case = GetTicketUseCase(repository=repository)
     record = get_use_case.execute(request.ticket_id)
 
@@ -108,16 +128,19 @@ def review_triage_decision(request: TriageDecisionRequest) -> TriageDecisionResp
 
 
 @router.get("", response_model=list[TicketRecordResponse])
-def list_tickets() -> list[TicketRecordResponse]:
-    repository = get_repository()
+def list_tickets(
+    repository: TicketRepositoryDep,
+) -> list[TicketRecordResponse]:
     use_case = ListTicketsUseCase(repository=repository)
     records = use_case.execute()
     return [_to_ticket_record_response(record) for record in records]
 
 
 @router.get("/{ticket_id}", response_model=TicketRecordResponse)
-def get_ticket(ticket_id: str) -> TicketRecordResponse:
-    repository = get_repository()
+def get_ticket(
+    ticket_id: str,
+    repository: TicketRepositoryDep,
+) -> TicketRecordResponse:
     use_case = GetTicketUseCase(repository=repository)
     record = use_case.execute(ticket_id)
 
