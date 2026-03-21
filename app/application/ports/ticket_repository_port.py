@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
 
 from app.application.dto.ticket_record import TicketRecord
+from app.domain.entities.assignment import Assignment
 from app.domain.entities.ticket import Ticket
+from app.domain.entities.ticket_event import TicketEvent
 from app.domain.entities.triage_analysis import TriageAnalysis
 from app.domain.entities.triage_decision import TriageDecision
 from app.domain.enums.ticket_status import TicketStatus
@@ -21,7 +23,22 @@ class TicketRepositoryPort(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def attach_assignment(self, ticket_id: str, assignment: Assignment) -> TicketRecord:
+        raise NotImplementedError
+
+    @abstractmethod
     def update_status(self, ticket_id: str, status: TicketStatus) -> TicketRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    def add_event(
+        self,
+        ticket_id: str,
+        event_type: str,
+        actor: str | None,
+        summary: str,
+        details: str | None = None,
+    ) -> TicketEvent:
         raise NotImplementedError
 
     @abstractmethod

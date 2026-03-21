@@ -9,6 +9,7 @@ from app.application.use_cases.list_tickets import ListTicketsUseCase
 from app.application.use_cases.review_triage_decision import ReviewTriageDecisionUseCase
 from app.application.use_cases.save_triage_decision import SaveTriageDecisionUseCase
 from app.application.use_cases.triage_ticket import TriageTicketUseCase
+from app.application.use_cases.get_dashboard_analytics import GetDashboardAnalyticsUseCase
 from app.domain.entities.assignment import Assignment
 from app.infrastructure.ai.ml_classifier import MLClassifier
 from app.infrastructure.persistence.sqlite_ticket_repository import SQLiteTicketRepository
@@ -16,6 +17,7 @@ from app.interfaces.api.dependencies import get_db_session, get_ticket_repositor
 from app.interfaces.api.schemas.ticket_schemas import (
     TicketAssignmentRequest,
     TicketAssignmentResponse,
+    DashboardAnalyticsResponse,
     TicketCreateRequest,
     TicketRecordResponse,
     TriageAnalysisResponse,
@@ -64,6 +66,18 @@ def _to_assignment_response(ticket_id: str, assignment) -> TicketAssignmentRespo
     )
 
 
+def _to_event_response(event):
+    return {
+        "id": event.id,
+        "ticket_id": event.ticket_id,
+        "event_type": event.event_type,
+        "actor": event.actor,
+        "summary": event.summary,
+        "details": event.details,
+        "created_at": event.created_at,
+    }
+
+
 def _to_ticket_record_response(record) -> TicketRecordResponse:
     analysis = _to_analysis_response(record.analysis) if record.analysis else None
     decision = _to_decision_response(record.ticket.id, record.decision) if record.decision else None
@@ -79,6 +93,7 @@ def _to_ticket_record_response(record) -> TicketRecordResponse:
         analysis=analysis,
         decision=decision,
         assignment=assignment,
+        events=[_to_event_response(event) for event in record.events],
     )
 
 
@@ -165,6 +180,26 @@ def assign_ticket(
     updated_record = assign_use_case.execute(request.ticket_id, assignment)
 
     return _to_assignment_response(updated_record.ticket.id, updated_record.assignment)
+
+
+@router.get("/analytics", response_model=DashboardAnalyticsResponse)
+def get_dashboard_analytics(
+    repository: TicketRepositoryDep,
+) -> DashboardAnalyticsResponse:
+    use_case = GetDashboardAnalyticsUseCase(repository=repository)
+    result = use_case.execute()
+
+    return DashboardAnalyticsResponse(
+        stats=result.stats,
+        status_distribution=result.status_distribution,
+        category_distribution=result.category_distribution,
+        priority_distribution=result.priority_distribution,
+        management_metrics=result.management_metrics,
+        review_funnel=result.review_funnel,
+        ai_acceptance=result.ai_acceptance,
+        needs_attention=result.needs_attention,
+        recent_activity=result.recent_activity,
+    )
 
 
 @router.get("", response_model=list[TicketRecordResponse])

@@ -1,11 +1,13 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
 class TicketCreateRequest(BaseModel):
-    title: str = Field(..., min_length=3, max_length=200)
+    title: str = Field(..., min_length=3, max_length=255)
     description: str = Field(..., min_length=5, max_length=5000)
     reporter: str | None = Field(default=None, max_length=100)
-    source: str = Field(default="internal", max_length=50)
+    source: str = Field(default="internal", min_length=2, max_length=50)
 
 
 class TriageAnalysisResponse(BaseModel):
@@ -18,7 +20,7 @@ class TriageAnalysisResponse(BaseModel):
     next_step: str
     rationale: str
     model_version: str
-    analyzed_at: str | None = None
+    analyzed_at: datetime | None = None
 
 
 class TriageResponse(BaseModel):
@@ -64,6 +66,16 @@ class TicketAssignmentResponse(BaseModel):
     assignment_note: str | None
 
 
+class TicketEventResponse(BaseModel):
+    id: int | None
+    ticket_id: str
+    event_type: str
+    actor: str | None = None
+    summary: str
+    details: str | None = None
+    created_at: datetime | None = None
+
+
 class TicketRecordResponse(BaseModel):
     ticket_id: str
     title: str
@@ -74,6 +86,7 @@ class TicketRecordResponse(BaseModel):
     analysis: TriageAnalysisResponse | None = None
     decision: TriageDecisionResponse | None = None
     assignment: TicketAssignmentResponse | None = None
+    events: list[TicketEventResponse] = Field(default_factory=list)
 
 
 class AnalyticsDistributionItem(BaseModel):
