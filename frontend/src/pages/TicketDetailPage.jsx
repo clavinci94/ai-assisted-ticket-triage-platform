@@ -45,6 +45,41 @@ function formatLabel(value, fallback = "Not available") {
   return pickFirst(value) ?? fallback;
 }
 
+function formatDateTime(value) {
+  if (!value) {
+    return "Unknown time";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleString();
+}
+
+function normalizeEvent(event, index) {
+  if (!event || typeof event !== "object") {
+    return {
+      id: `event-${index}`,
+      eventType: "unknown",
+      actor: null,
+      summary: "Unknown event",
+      details: null,
+      createdAt: null,
+    };
+  }
+
+  return {
+    id: pickFirst(event.id, `event-${index}`),
+    eventType: pickFirst(event.event_type, event.eventType, "unknown"),
+    actor: pickFirst(event.actor),
+    summary: pickFirst(event.summary, "Event recorded"),
+    details: pickFirst(event.details),
+    createdAt: pickFirst(event.created_at, event.createdAt),
+  };
+}
+
 function normalizeTicket(ticket) {
   if (!ticket || typeof ticket !== "object") {
     return null;
@@ -55,6 +90,8 @@ function normalizeTicket(ticket) {
     ticket.category,
     ticket.predicted_category,
     ticket.ai_category,
+    ticket.decision?.final_category,
+    ticket.analysis?.predicted_category,
     ticket.ai_prediction?.category
   );
 
@@ -63,6 +100,8 @@ function normalizeTicket(ticket) {
     ticket.priority,
     ticket.predicted_priority,
     ticket.ai_priority,
+    ticket.decision?.final_priority,
+    ticket.analysis?.predicted_priority,
     ticket.ai_prediction?.priority
   );
 
@@ -70,20 +109,23 @@ function normalizeTicket(ticket) {
     ticket.assigned_to,
     ticket.assignee,
     ticket.owner,
-    ticket.final_assignee
+    ticket.final_assignee,
+    ticket.assignment?.assigned_team
   );
 
   const confidence = pickFirst(
     ticket.confidence,
     ticket.ai_confidence,
     ticket.prediction_confidence,
+    ticket.analysis?.category_confidence,
     ticket.ai_prediction?.confidence
   );
 
   const summary = pickFirst(
     ticket.summary,
     ticket.ai_summary,
-    ticket.generated_summary
+    ticket.generated_summary,
+    ticket.analysis?.summary
   );
 
   const description = pickFirst(
@@ -97,7 +139,7 @@ function normalizeTicket(ticket) {
     ticket.title,
     ticket.subject,
     summary,
-    `Ticket #${pickFirst(ticket.id, ticket.ticket_id, "Unknown")}`
+    `Ticket #${pickFirst(ticket.id, ticket.ticket_id, ticket.ticketId, "Unknown")}`
   );
 
   const status = pickFirst(
@@ -122,18 +164,24 @@ function normalizeTicket(ticket) {
   const reviewDecision = pickFirst(
     ticket.review_decision,
     ticket.final_decision,
+    ticket.decision?.final_category ? `${ticket.decision.final_category} / ${ticket.decision.final_priority}` : null,
     ticket.decision
   );
 
   const reviewReason = pickFirst(
     ticket.review_reason,
     ticket.reason,
-    ticket.notes
+    ticket.notes,
+    ticket.decision?.review_comment
   );
+
+  const events = Array.isArray(ticket.events)
+    ? ticket.events.map(normalizeEvent)
+    : [];
 
   return {
     raw: ticket,
-    id: pickFirst(ticket.id, ticket.ticket_id, "Unknown"),
+    id: pickFirst(ticket.id, ticket.ticket_id, ticket.ticketId, "Unknown"),
     title,
     description,
     summary,
@@ -146,6 +194,7 @@ function normalizeTicket(ticket) {
     updatedAt,
     reviewDecision,
     reviewReason,
+    events,
   };
 }
 
@@ -163,6 +212,25 @@ function EmptyInline({ title, text }) {
     <div className="detail-empty-state">
       <strong>{title}</strong>
       <p>{text}</p>
+    </div>
+  );
+}
+
+function EventItem({ event }) {
+  return (
+    <div className="detail-event-item">
+      <div className="detail-event-marker" />
+      <div className="detail-event-content">
+        <div className="detail-event-topline">
+          <strong>{event.summary}</strong>
+          <span>{formatDateTime(event.createdAt)}</span>
+        </div>
+        <div className="detail-event-meta">
+          <span className="detail-event-type">{event.eventType}</span>
+          <span>{event.actor ? `Actor: ${event.actor}` : "Actor: system"}</span>
+        </div>
+        {event.details ? <p>{event.details}</p> : null}
+      </div>
     </div>
   );
 }
@@ -289,15 +357,20 @@ export default function TicketDetailPage() {
       return;
     }
 
+    const normalizedCategory = (ticket.category || "bug").toLowerCase();
+    const normalizedPriority = (ticket.priority || "medium").toLowerCase();
+
     setReviewSubmitting(true);
 
     try {
       await api.post("/tickets/decision", {
         ticket_id: ticket.id,
-        decision: reviewDecision,
-        review_decision: reviewDecision,
-        reason: reviewReason,
-        notes: reviewReason,
+        final_category: normalizedCategory,
+        final_priority: normalizedPriority,
+        final_team: assignmentValue.trim() || ticket.assignee || "triage-team",
+        accepted_ai_suggestion: reviewDecision === "accepted",
+        review_comment: reviewReason,
+        reviewed_by: "claudio",
       });
 
       emitToast({
@@ -344,8 +417,9 @@ export default function TicketDetailPage() {
     try {
       await api.post("/tickets/assign", {
         ticket_id: ticket.id,
-        assigned_to: assignmentValue.trim(),
-        assignee: assignmentValue.trim(),
+        assigned_team: assignmentValue.trim(),
+        assigned_by: "claudio",
+        assignment_note: "Assigned from TicketDetailPage",
       });
 
       emitToast({
@@ -368,13 +442,11 @@ export default function TicketDetailPage() {
 
   const handleRefresh = async () => {
     await fetchTicket({ silent: true });
-    if (!loadError) {
-      emitToast({
-        type: "success",
-        title: "Ticket refreshed",
-        description: "The latest ticket data is now displayed.",
-      });
-    }
+    emitToast({
+      type: "success",
+      title: "Ticket refreshed",
+      description: "The latest ticket data is now displayed.",
+    });
   };
 
   const handleCopyId = async () => {
@@ -589,6 +661,21 @@ export default function TicketDetailPage() {
                   />
                 )}
               </SectionCard>
+
+              <SectionCard title="History & audit trail">
+                {ticket.events.length ? (
+                  <div className="detail-events-list">
+                    {ticket.events.map((event) => (
+                      <EventItem key={event.id} event={event} />
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyInline
+                    title="No history available"
+                    text="This ticket has no recorded audit events yet."
+                  />
+                )}
+              </SectionCard>
             </div>
           ) : null}
 
@@ -637,10 +724,10 @@ export default function TicketDetailPage() {
             <SectionCard title="Assignment">
               <form className="detail-form" onSubmit={handleAssignmentSubmit}>
                 <label className="detail-form-field">
-                  <span>Assignee</span>
+                  <span>Assignee / team</span>
                   <input
                     type="text"
-                    placeholder="e.g. product-team@company.com"
+                    placeholder="e.g. engineering-team"
                     value={assignmentValue}
                     onChange={(event) => setAssignmentValue(event.target.value)}
                     disabled={assignmentSubmitting}
