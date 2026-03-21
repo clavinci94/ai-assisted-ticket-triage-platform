@@ -1,4 +1,11 @@
-def test_dashboard_analytics_returns_expected_structure(client):
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+
+def test_dashboard_analytics_returns_expected_structure():
+    client = TestClient(app)
+
     triage_payload_1 = {
         "title": "Checkout fails for premium users",
         "description": "Users cannot complete checkout. Needs urgent review.",
@@ -56,5 +63,4 @@ def test_dashboard_analytics_returns_expected_structure(client):
     assert isinstance(body["ai_acceptance"], list)
     assert isinstance(body["needs_attention"], list)
     assert isinstance(body["recent_activity"], list)
-
     assert body["management_metrics"]["reviewed_count"] >= 1
