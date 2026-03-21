@@ -1,3 +1,4 @@
+from datetime import datetime
 from app.application.ports.classifier_port import ClassifierPort
 from app.domain.entities.ticket import Ticket
 from app.domain.entities.triage_analysis import TriageAnalysis

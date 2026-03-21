@@ -5,3 +5,4 @@ class TicketStatus(str, Enum):
     NEW = "new"
     TRIAGED = "triaged"
     REVIEWED = "reviewed"
+    ASSIGNED = "assigned"

@@ -1,3 +1,6 @@
+from dataclasses import replace
+from datetime import datetime, timezone
+
 from app.application.dto.triage_result import TriageResult
 from app.application.ports.classifier_port import ClassifierPort
 from app.application.ports.ticket_repository_port import TicketRepositoryPort
@@ -19,6 +22,13 @@ class TriageTicketUseCase:
         self.repository.create_ticket(ticket)
 
         analysis = self.classifier.analyze(ticket)
+
+        analysis = replace(
+            analysis,
+            model_version=analysis.model_version or "tfidf-mnb-v1",
+            analyzed_at=analysis.analyzed_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        )
+
         self.repository.attach_analysis(ticket.id, analysis)
         self.repository.update_status(ticket.id, TicketStatus.TRIAGED)
 

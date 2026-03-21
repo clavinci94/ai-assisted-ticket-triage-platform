@@ -31,3 +31,26 @@ dist/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Local review / backup artifacts
+.apex-backups/
+.apex-review/
+frontend/.backup/
+
+# Build / dependency artifacts
+frontend/dist/
+frontend/node_modules/
+frontend/frontend/node_modules/
+__pycache__/
+.pytest_cache/
+
+# Local databases / backups
+triage.db
+triage.db.bak
+triage.db.bak2
+triage.db.before-assignment.bak
+
+# Backup files
+*.bak
+*.bak.*
+*~

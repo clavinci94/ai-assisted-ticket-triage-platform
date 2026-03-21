@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from app.application.ports.classifier_port import ClassifierPort
 from app.domain.entities.ticket import Ticket
 from app.domain.entities.triage_analysis import TriageAnalysis
@@ -7,8 +9,9 @@ from app.infrastructure.ai.model_loader import load_model
 
 
 class MLClassifier(ClassifierPort):
-    def __init__(self) -> None:
+    def __init__(self, model_version: str = "tfidf-mnb-v1") -> None:
         self.model = load_model()
+        self.model_version = model_version
 
     def analyze(self, ticket: Ticket) -> TriageAnalysis:
         if self.model is None:
@@ -24,7 +27,6 @@ class MLClassifier(ClassifierPort):
         suggested_team = self._infer_team(category)
         next_step = self._infer_next_step(category)
         rationale = f"ML classification using TF-IDF + MultinomialNB. Predicted label: {label}"
-
         summary = f"Triage analysis for ticket: {ticket.title}"
 
         return TriageAnalysis(
@@ -36,6 +38,8 @@ class MLClassifier(ClassifierPort):
             suggested_team=suggested_team,
             next_step=next_step,
             rationale=rationale,
+            model_version=self.model_version,
+            analyzed_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         )
 
     def _map_label_to_category(self, label: str) -> TicketCategory:
