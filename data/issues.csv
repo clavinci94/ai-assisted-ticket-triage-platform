@@ -1,0 +1,12 @@
+title,body,label
+App crashes when clicking save,The application crashes immediately after pressing save,bug
+Unexpected error on startup,Users see an error message right after startup,bug
+Crash when loading dashboard,Dashboard fails to load and crashes,bug
+Add dark mode option,Users want a dark mode for the interface,feature
+Support multiple languages,Add language selection for international users,feature
+Implement export to CSV,Allow exporting ticket lists as CSV,feature
+How to reset my password?,User asks how to reset password,question
+Is this library compatible with Python 3.10?,Compatibility question about Python version,question
+What’s the difference between X and Y?,General usage question,question
+Payment service outage,Critical outage in production. Payment failed for multiple users,bug
+Production outage after deployment,Users report login failure and critical outage after the latest release,bug

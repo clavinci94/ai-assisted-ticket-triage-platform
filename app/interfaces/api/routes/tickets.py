@@ -8,7 +8,7 @@ from app.application.use_cases.list_tickets import ListTicketsUseCase
 from app.application.use_cases.review_triage_decision import ReviewTriageDecisionUseCase
 from app.application.use_cases.save_triage_decision import SaveTriageDecisionUseCase
 from app.application.use_cases.triage_ticket import TriageTicketUseCase
-from app.infrastructure.ai.baseline_classifier import BaselineClassifier
+from app.infrastructure.ai.ml_classifier import MLClassifier
 from app.infrastructure.persistence.sqlite_ticket_repository import SQLiteTicketRepository
 from app.interfaces.api.dependencies import get_db_session, get_ticket_repository
 from app.interfaces.api.schemas.ticket_schemas import (
@@ -85,7 +85,7 @@ def triage_ticket(
     ticket = to_domain_ticket(request)
 
     use_case = TriageTicketUseCase(
-        classifier=BaselineClassifier(),
+        classifier=MLClassifier(),
         repository=repository,
     )
     result = use_case.execute(ticket)
