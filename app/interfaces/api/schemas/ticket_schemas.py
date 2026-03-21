@@ -20,6 +20,7 @@ class TriageAnalysisResponse(BaseModel):
 
 
 class TriageResponse(BaseModel):
+    ticket_id: str
     analysis: TriageAnalysisResponse
     final_priority: str
     final_category: str
@@ -28,6 +29,7 @@ class TriageResponse(BaseModel):
 
 
 class TriageDecisionRequest(BaseModel):
+    ticket_id: str
     final_category: str = Field(..., min_length=3, max_length=50)
     final_priority: str = Field(..., min_length=3, max_length=50)
     final_team: str = Field(..., min_length=2, max_length=100)
@@ -37,9 +39,21 @@ class TriageDecisionRequest(BaseModel):
 
 
 class TriageDecisionResponse(BaseModel):
+    ticket_id: str
     final_category: str
     final_priority: str
     final_team: str
     accepted_ai_suggestion: bool
     review_comment: str | None
     reviewed_by: str | None
+
+
+class TicketRecordResponse(BaseModel):
+    ticket_id: str
+    title: str
+    description: str
+    reporter: str | None
+    source: str
+    status: str
+    analysis: TriageAnalysisResponse | None = None
+    decision: TriageDecisionResponse | None = None
