@@ -8,11 +8,38 @@ class TicketCreateRequest(BaseModel):
     source: str = Field(default="internal", max_length=50)
 
 
-class TriageResponse(BaseModel):
+class TriageAnalysisResponse(BaseModel):
     predicted_category: str
     category_confidence: float
     predicted_priority: str
     priority_confidence: float
     summary: str
     suggested_team: str
+    next_step: str
     rationale: str
+
+
+class TriageResponse(BaseModel):
+    analysis: TriageAnalysisResponse
+    final_priority: str
+    final_category: str
+    final_team: str
+    ai_recommendation_used: bool
+
+
+class TriageDecisionRequest(BaseModel):
+    final_category: str = Field(..., min_length=3, max_length=50)
+    final_priority: str = Field(..., min_length=3, max_length=50)
+    final_team: str = Field(..., min_length=2, max_length=100)
+    accepted_ai_suggestion: bool
+    review_comment: str | None = Field(default=None, max_length=1000)
+    reviewed_by: str | None = Field(default=None, max_length=100)
+
+
+class TriageDecisionResponse(BaseModel):
+    final_category: str
+    final_priority: str
+    final_team: str
+    accepted_ai_suggestion: bool
+    review_comment: str | None
+    reviewed_by: str | None

@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 
-from app.application.dto.triage_result import TriageResult
 from app.domain.entities.ticket import Ticket
+from app.domain.entities.triage_analysis import TriageAnalysis
 
 
 class ClassifierPort(ABC):
     @abstractmethod
-    def analyze(self, ticket: Ticket) -> TriageResult:
+    def analyze(self, ticket: Ticket) -> TriageAnalysis:
         raise NotImplementedError

@@ -1,14 +1,14 @@
 from dataclasses import dataclass
 
-from app.domain.entities.triage_analysis import TriageAnalysis
 from app.domain.enums.ticket_category import TicketCategory
 from app.domain.enums.ticket_priority import TicketPriority
 
 
 @dataclass
-class TriageResult:
-    analysis: TriageAnalysis
-    final_priority: TicketPriority
+class TriageDecision:
     final_category: TicketCategory
+    final_priority: TicketPriority
     final_team: str
-    ai_recommendation_used: bool
+    accepted_ai_suggestion: bool
+    review_comment: str | None = None
+    reviewed_by: str | None = None
