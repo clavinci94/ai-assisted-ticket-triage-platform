@@ -1,12 +1,51 @@
 title,body,label
-App crashes when clicking save,The application crashes immediately after pressing save,bug
-Unexpected error on startup,Users see an error message right after startup,bug
-Crash when loading dashboard,Dashboard fails to load and crashes,bug
-Add dark mode option,Users want a dark mode for the interface,feature
-Support multiple languages,Add language selection for international users,feature
-Implement export to CSV,Allow exporting ticket lists as CSV,feature
-How to reset my password?,User asks how to reset password,question
-Is this library compatible with Python 3.10?,Compatibility question about Python version,question
-What’s the difference between X and Y?,General usage question,question
-Payment service outage,Critical outage in production. Payment failed for multiple users,bug
-Production outage after deployment,Users report login failure and critical outage after the latest release,bug
+App crashes on save,The application crashes immediately after pressing save in the ticket form.,bug
+Login fails after deployment,Users cannot log in after the latest production deployment.,bug
+Payment service outage,Critical outage in production. Payment failed for multiple users.,bug
+Dashboard shows server error,The dashboard returns a 500 error when loading analytics widgets.,bug
+File upload fails for PDF documents,Uploading PDF attachments fails with an unexpected validation error.,bug
+Search results not loading,The search page remains blank and results never load for some users.,bug
+Notifications duplicated,Users receive the same notification multiple times after one action.,bug
+API returns timeout on ticket list,The ticket list endpoint times out when many records are requested.,bug
+User session expires too early,User sessions end after a few minutes despite active usage.,bug
+Export to CSV creates empty file,CSV export completes but the downloaded file is empty.,bug
+Add dark mode,Users would like a dark mode option in the web application.,feature
+Support Slack notifications,The platform should send ticket updates to Slack channels.,feature
+Implement ticket tagging,Users need the ability to tag tickets for easier filtering.,feature
+Add dashboard filters,The analytics dashboard should allow filtering by team and status.,feature
+Bulk ticket assignment,Agents should be able to assign multiple tickets at once.,feature
+Add comment mentions,Users should be able to mention teammates in ticket comments.,feature
+Custom priority rules,Administrators want to define custom rules for priority assignment.,feature
+Export triage history,Product owners want to export triage history for reporting.,feature
+Add SSO integration,The application should support single sign-on for internal users.,feature
+Create audit dashboard,Managers need a dashboard to review AI suggestion overrides.,feature
+How do I reset my password?,A user asks how to reset the password for the internal portal.,question
+What is the difference between bug and requirement?,A team member asks how tickets should be categorized.,question
+How is ticket priority calculated?,A user wants to understand how the priority score is determined.,question
+Can I reopen a closed ticket?,A reporter asks whether resolved tickets can be reopened.,question
+Which team handles billing incidents?,A user asks which internal team owns payment-related problems.,question
+Where can I see audit logs?,A stakeholder asks where triage decision changes are visible.,question
+Is the platform mobile friendly?,A manager asks whether the web interface works on mobile devices.,question
+How do I assign a ticket manually?,A new support agent asks how to assign a ticket to a team.,question
+Can attachments be added later?,A user asks if files can be uploaded after ticket creation.,question
+What does AI confidence mean?,A reviewer asks how to interpret the confidence score.,question
+Need support with account access,The user cannot access the account and needs assistance from support.,support
+Help needed for report export,A user needs help exporting a report from the dashboard.,support
+Support request for failed import,The customer needs support because CSV import does not complete.,support
+Need help configuring notifications,A user asks support for help setting up email notifications.,support
+Assistance required for team setup,A new manager needs help creating and configuring a team.,support
+Support needed after role change,A user lost access after a role update and needs assistance.,support
+Help with dashboard permissions,The reporter cannot access analytics and asks for support.,support
+Need assistance with SSO login,A user needs support because single sign-on login is unclear.,support
+Support request for duplicate tickets,The team asks for help understanding duplicate ticket handling.,support
+Help needed to update profile,A user needs support updating their personal account profile.,support
+Clarify acceptance criteria for export feature,The request needs clearer acceptance criteria before implementation.,requirement
+Requirement for audit trail retention,The system must retain audit logs for at least twelve months.,requirement
+Need role-based access control,The platform must support role-based permissions for enterprise teams.,requirement
+Requirement for multilingual UI,The application must support English and German user interfaces.,requirement
+Need configurable workflow states,Administrators must be able to configure workflow states.,requirement
+Requirement for duplicate detection,The platform must identify similar tickets during intake.,requirement
+Need reporting for SLA breaches,The system must report SLA violations for critical tickets.,requirement
+Requirement for data export,Users must be able to export tickets in CSV format.,requirement
+Need traceability for triage decisions,The application must store who changed a triage decision and why.,requirement
+Requirement for team assignment rules,The system must support deterministic routing rules by ticket category.,requirement
