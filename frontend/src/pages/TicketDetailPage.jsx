@@ -1,659 +1,666 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import * as ToastModule from "../components/ToastProvider";
 import Badge from "../components/Badge";
-import LabelValue from "../components/LabelValue";
 import MessageBanner from "../components/MessageBanner";
 import SectionCard from "../components/SectionCard";
-import LoadingState from "../components/LoadingState";
-import EmptyState from "../components/EmptyState";
-import { assignTicket, fetchTicket, saveDecision } from "../lib/api";
+import { api } from "../lib/api";
 
-const CATEGORY_OPTIONS = ["bug", "feature", "support", "requirement", "question", "unknown"];
-const PRIORITY_OPTIONS = ["low", "medium", "high", "critical"];
-const TEAM_OPTIONS = ["engineering-team", "product-team", "support-team", "triage-team"];
+const TABS = [
+  { key: "overview", label: "Overview" },
+  { key: "review", label: "Review" },
+  { key: "assignment", label: "Assignment" },
+];
 
-const initialDecisionForm = {
-  final_category: "bug",
-  final_priority: "high",
-  final_team: "engineering-team",
-  accepted_ai_suggestion: true,
-  review_comment: "",
-  reviewed_by: "",
-};
-
-const initialAssignmentForm = {
-  assigned_team: "engineering-team",
-  assigned_by: "",
-  assignment_note: "",
-};
-
-const tabs = ["overview", "analysis", "review", "assignment"];
-
-function validateDecisionForm(form) {
-  const errors = {};
-
-  if (!CATEGORY_OPTIONS.includes(form.final_category)) {
-    errors.final_category = "Please select a valid category.";
-  }
-
-  if (!PRIORITY_OPTIONS.includes(form.final_priority)) {
-    errors.final_priority = "Please select a valid priority.";
-  }
-
-  if (!TEAM_OPTIONS.includes(form.final_team)) {
-    errors.final_team = "Please select a valid team.";
-  }
-
-  if (form.reviewed_by && form.reviewed_by.trim().length > 100) {
-    errors.reviewed_by = "Reviewed by must be 100 characters or fewer.";
-  }
-
-  if (form.review_comment && form.review_comment.trim().length > 1000) {
-    errors.review_comment = "Review comment must be 1000 characters or fewer.";
-  }
-
-  return errors;
+function readErrorMessage(error) {
+  return (
+    error?.response?.data?.detail ||
+    error?.response?.data?.message ||
+    error?.message ||
+    "An unexpected error occurred."
+  );
 }
 
-function validateAssignmentForm(form) {
-  const errors = {};
-
-  if (!TEAM_OPTIONS.includes(form.assigned_team)) {
-    errors.assigned_team = "Please select a valid team.";
+function pickFirst(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return value;
+    }
   }
-
-  if (form.assigned_by && form.assigned_by.trim().length > 100) {
-    errors.assigned_by = "Assigned by must be 100 characters or fewer.";
-  }
-
-  if (form.assignment_note && form.assignment_note.trim().length > 1000) {
-    errors.assignment_note = "Assignment note must be 1000 characters or fewer.";
-  }
-
-  return errors;
+  return null;
 }
 
-function FieldError({ message }) {
-  if (!message) return null;
-  return <div className="field-error">{message}</div>;
+function formatConfidence(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "—";
+  }
+  const numeric = Number(value);
+  if (numeric > 0 && numeric <= 1) {
+    return `${Math.round(numeric * 100)}%`;
+  }
+  return `${Math.round(numeric)}%`;
+}
+
+function formatLabel(value, fallback = "Not available") {
+  return pickFirst(value) ?? fallback;
+}
+
+function normalizeTicket(ticket) {
+  if (!ticket || typeof ticket !== "object") {
+    return null;
+  }
+
+  const finalCategory = pickFirst(
+    ticket.final_category,
+    ticket.category,
+    ticket.predicted_category,
+    ticket.ai_category,
+    ticket.ai_prediction?.category
+  );
+
+  const finalPriority = pickFirst(
+    ticket.final_priority,
+    ticket.priority,
+    ticket.predicted_priority,
+    ticket.ai_priority,
+    ticket.ai_prediction?.priority
+  );
+
+  const assignee = pickFirst(
+    ticket.assigned_to,
+    ticket.assignee,
+    ticket.owner,
+    ticket.final_assignee
+  );
+
+  const confidence = pickFirst(
+    ticket.confidence,
+    ticket.ai_confidence,
+    ticket.prediction_confidence,
+    ticket.ai_prediction?.confidence
+  );
+
+  const summary = pickFirst(
+    ticket.summary,
+    ticket.ai_summary,
+    ticket.generated_summary
+  );
+
+  const description = pickFirst(
+    ticket.description,
+    ticket.body,
+    ticket.text,
+    ticket.content
+  );
+
+  const title = pickFirst(
+    ticket.title,
+    ticket.subject,
+    summary,
+    `Ticket #${pickFirst(ticket.id, ticket.ticket_id, "Unknown")}`
+  );
+
+  const status = pickFirst(
+    ticket.status,
+    ticket.state,
+    ticket.workflow_status,
+    "open"
+  );
+
+  const createdAt = pickFirst(
+    ticket.created_at,
+    ticket.createdAt,
+    ticket.timestamp
+  );
+
+  const updatedAt = pickFirst(
+    ticket.updated_at,
+    ticket.updatedAt,
+    createdAt
+  );
+
+  const reviewDecision = pickFirst(
+    ticket.review_decision,
+    ticket.final_decision,
+    ticket.decision
+  );
+
+  const reviewReason = pickFirst(
+    ticket.review_reason,
+    ticket.reason,
+    ticket.notes
+  );
+
+  return {
+    raw: ticket,
+    id: pickFirst(ticket.id, ticket.ticket_id, "Unknown"),
+    title,
+    description,
+    summary,
+    category: finalCategory,
+    priority: finalPriority,
+    assignee,
+    confidence,
+    status,
+    createdAt,
+    updatedAt,
+    reviewDecision,
+    reviewReason,
+  };
+}
+
+function InfoStat({ label, value }) {
+  return (
+    <div className="detail-stat">
+      <span className="detail-stat-label">{label}</span>
+      <span className="detail-stat-value">{value}</span>
+    </div>
+  );
+}
+
+function EmptyInline({ title, text }) {
+  return (
+    <div className="detail-empty-state">
+      <strong>{title}</strong>
+      <p>{text}</p>
+    </div>
+  );
 }
 
 export default function TicketDetailPage() {
   const { ticketId } = useParams();
+  const toastApi = ToastModule.useToast?.() ?? ToastModule.useToasts?.() ?? null;
+
+  const emitToast = useCallback(
+    ({ type = "info", title, description }) => {
+      if (toastApi?.toast) {
+        toastApi.toast({
+          title,
+          description,
+          variant: type === "error" ? "destructive" : "default",
+        });
+        return;
+      }
+
+      if (toastApi?.addToast) {
+        toastApi.addToast({
+          type,
+          title,
+          message: description,
+        });
+        return;
+      }
+
+      if (toastApi?.showToast) {
+        toastApi.showToast({
+          type,
+          title,
+          description,
+        });
+      }
+    },
+    [toastApi]
+  );
 
   const [ticket, setTicket] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
-  const [decisionForm, setDecisionForm] = useState(initialDecisionForm);
-  const [assignmentForm, setAssignmentForm] = useState(initialAssignmentForm);
+  const [loadError, setLoadError] = useState("");
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [assignmentSubmitting, setAssignmentSubmitting] = useState(false);
+  const [reviewDecision, setReviewDecision] = useState("accepted");
+  const [reviewReason, setReviewReason] = useState("");
+  const [assignmentValue, setAssignmentValue] = useState("");
 
-  const [decisionErrors, setDecisionErrors] = useState({});
-  const [assignmentErrors, setAssignmentErrors] = useState({});
-
-  const [loading, setLoading] = useState(true);
-  const [submittingDecision, setSubmittingDecision] = useState(false);
-  const [submittingAssignment, setSubmittingAssignment] = useState(false);
-  const [runningQuickAction, setRunningQuickAction] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
-  async function loadTicketData() {
-    try {
-      setLoading(true);
-      setError("");
-      const data = await fetchTicket(ticketId);
-      setTicket(data);
-
-      if (data?.decision) {
-        setDecisionForm({
-          final_category: data.decision.final_category || "bug",
-          final_priority: data.decision.final_priority || "high",
-          final_team: data.decision.final_team || "engineering-team",
-          accepted_ai_suggestion: Boolean(data.decision.accepted_ai_suggestion),
-          review_comment: data.decision.review_comment || "",
-          reviewed_by: data.decision.reviewed_by || "",
-        });
-      } else if (data?.analysis) {
-        setDecisionForm({
-          final_category: data.analysis.predicted_category || "bug",
-          final_priority: data.analysis.predicted_priority || "high",
-          final_team: data.analysis.suggested_team || "engineering-team",
-          accepted_ai_suggestion: true,
-          review_comment: "",
-          reviewed_by: "",
-        });
-      } else {
-        setDecisionForm(initialDecisionForm);
+  const fetchTicket = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!ticketId) {
+        setLoadError("Ticket ID is missing.");
+        setInitialLoading(false);
+        return;
       }
 
-      if (data?.assignment) {
-        setAssignmentForm({
-          assigned_team: data.assignment.assigned_team || "engineering-team",
-          assigned_by: data.assignment.assigned_by || "",
-          assignment_note: data.assignment.assignment_note || "",
-        });
-      } else if (data?.analysis) {
-        setAssignmentForm({
-          assigned_team: data.analysis.suggested_team || "engineering-team",
-          assigned_by: "",
-          assignment_note: "",
-        });
+      if (silent) {
+        setRefreshing(true);
       } else {
-        setAssignmentForm(initialAssignmentForm);
+        setInitialLoading(true);
       }
-    } catch (err) {
-      setError(err?.response?.data?.detail || "Failed to load ticket.");
-    } finally {
-      setLoading(false);
-    }
-  }
 
-  useEffect(() => {
-    loadTicketData();
-  }, [ticketId]);
-
-  useEffect(() => {
-    setDecisionErrors(validateDecisionForm(decisionForm));
-  }, [decisionForm]);
-
-  useEffect(() => {
-    setAssignmentErrors(validateAssignmentForm(assignmentForm));
-  }, [assignmentForm]);
-
-  const decisionFormValid = useMemo(
-    () => Object.keys(decisionErrors).length === 0,
-    [decisionErrors]
+      try {
+        const response = await api.get(`/tickets/${ticketId}`);
+        const normalized = normalizeTicket(response.data);
+        setTicket(normalized);
+        setAssignmentValue(normalized?.assignee ?? "");
+        setReviewDecision(normalized?.reviewDecision ?? "accepted");
+        setReviewReason(normalized?.reviewReason ?? "");
+        setLoadError("");
+      } catch (error) {
+        const message = readErrorMessage(error);
+        setLoadError(message);
+        emitToast({
+          type: "error",
+          title: "Ticket could not be loaded",
+          description: message,
+        });
+      } finally {
+        setInitialLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [ticketId, emitToast]
   );
 
-  const assignmentFormValid = useMemo(
-    () => Object.keys(assignmentErrors).length === 0,
-    [assignmentErrors]
+  useEffect(() => {
+    fetchTicket();
+  }, [fetchTicket]);
+
+  const detailBadges = useMemo(
+    () => [
+      {
+        label: formatLabel(ticket?.status, "Open"),
+        variant: "neutral",
+      },
+      {
+        label: `Category: ${formatLabel(ticket?.category)}`,
+        variant: "info",
+      },
+      {
+        label: `Priority: ${formatLabel(ticket?.priority)}`,
+        variant: "warning",
+      },
+      {
+        label: `Confidence: ${formatConfidence(ticket?.confidence)}`,
+        variant: "success",
+      },
+    ],
+    [ticket]
   );
 
-  function applyAiToDecisionForm() {
-    if (!ticket?.analysis) return;
+  const handleReviewSubmit = async (event) => {
+    event.preventDefault();
 
-    setDecisionForm((prev) => ({
-      ...prev,
-      final_category: ticket.analysis.predicted_category || prev.final_category,
-      final_priority: ticket.analysis.predicted_priority || prev.final_priority,
-      final_team: ticket.analysis.suggested_team || prev.final_team,
-      accepted_ai_suggestion: true,
-    }));
-    setSuccess("AI recommendation copied into the review form.");
-    setError("");
-  }
+    if (!ticket?.id) {
+      emitToast({
+        type: "error",
+        title: "Review failed",
+        description: "No ticket is currently loaded.",
+      });
+      return;
+    }
 
-  function copyAiTeamToAssignmentForm() {
-    if (!ticket?.analysis?.suggested_team) return;
-
-    setAssignmentForm((prev) => ({
-      ...prev,
-      assigned_team: ticket.analysis.suggested_team,
-    }));
-    setSuccess("Suggested AI team copied into the assignment form.");
-    setError("");
-  }
-
-  async function handleAcceptAiRecommendation() {
-    if (!ticket?.analysis) return;
+    setReviewSubmitting(true);
 
     try {
-      setRunningQuickAction(true);
-      setError("");
-      setSuccess("");
-
-      await saveDecision({
-        ticket_id: ticketId,
-        final_category: ticket.analysis.predicted_category,
-        final_priority: ticket.analysis.predicted_priority,
-        final_team: ticket.analysis.suggested_team,
-        accepted_ai_suggestion: true,
-        review_comment: "Accepted AI recommendation via quick action.",
-        reviewed_by: decisionForm.reviewed_by.trim(),
+      await api.post("/tickets/decision", {
+        ticket_id: ticket.id,
+        decision: reviewDecision,
+        review_decision: reviewDecision,
+        reason: reviewReason,
+        notes: reviewReason,
       });
 
-      await loadTicketData();
-      setActiveTab("review");
-      setSuccess("AI recommendation accepted and saved.");
-    } catch (err) {
-      setError(err?.response?.data?.detail || "Failed to accept AI recommendation.");
-    } finally {
-      setRunningQuickAction(false);
-    }
-  }
+      emitToast({
+        type: "success",
+        title: "Review saved",
+        description: `Decision "${reviewDecision}" was stored successfully.`,
+      });
 
-  async function handleAssignToSuggestedTeam() {
-    if (!ticket?.analysis?.suggested_team) return;
+      await fetchTicket({ silent: true });
+    } catch (error) {
+      emitToast({
+        type: "error",
+        title: "Review failed",
+        description: readErrorMessage(error),
+      });
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
+  const handleAssignmentSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!ticket?.id) {
+      emitToast({
+        type: "error",
+        title: "Assignment failed",
+        description: "No ticket is currently loaded.",
+      });
+      return;
+    }
+
+    if (!assignmentValue.trim()) {
+      emitToast({
+        type: "error",
+        title: "Assignment failed",
+        description: "Please enter an assignee before saving.",
+      });
+      return;
+    }
+
+    setAssignmentSubmitting(true);
 
     try {
-      setRunningQuickAction(true);
-      setError("");
-      setSuccess("");
-
-      await assignTicket({
-        ticket_id: ticketId,
-        assigned_team: ticket.analysis.suggested_team,
-        assigned_by: assignmentForm.assigned_by.trim(),
-        assignment_note:
-          assignmentForm.assignment_note.trim() ||
-          "Assigned to AI-suggested team via quick action.",
+      await api.post("/tickets/assign", {
+        ticket_id: ticket.id,
+        assigned_to: assignmentValue.trim(),
+        assignee: assignmentValue.trim(),
       });
 
-      await loadTicketData();
-      setActiveTab("assignment");
-      setSuccess("Ticket assigned to the AI-suggested team.");
-    } catch (err) {
-      setError(err?.response?.data?.detail || "Failed to assign ticket to suggested team.");
+      emitToast({
+        type: "success",
+        title: "Assignment saved",
+        description: `Ticket assigned to ${assignmentValue.trim()}.`,
+      });
+
+      await fetchTicket({ silent: true });
+    } catch (error) {
+      emitToast({
+        type: "error",
+        title: "Assignment failed",
+        description: readErrorMessage(error),
+      });
     } finally {
-      setRunningQuickAction(false);
+      setAssignmentSubmitting(false);
     }
-  }
+  };
 
-  async function handleDecisionSubmit(e) {
-    e.preventDefault();
+  const handleRefresh = async () => {
+    await fetchTicket({ silent: true });
+    if (!loadError) {
+      emitToast({
+        type: "success",
+        title: "Ticket refreshed",
+        description: "The latest ticket data is now displayed.",
+      });
+    }
+  };
 
-    const errors = validateDecisionForm(decisionForm);
-    setDecisionErrors(errors);
-    if (Object.keys(errors).length > 0) return;
-
+  const handleCopyId = async () => {
     try {
-      setSubmittingDecision(true);
-      setError("");
-      setSuccess("");
-
-      await saveDecision({
-        ticket_id: ticketId,
-        ...decisionForm,
-        review_comment: decisionForm.review_comment.trim(),
-        reviewed_by: decisionForm.reviewed_by.trim(),
+      await navigator.clipboard.writeText(String(ticket?.id ?? ""));
+      emitToast({
+        type: "success",
+        title: "Ticket ID copied",
+        description: `Copied ${ticket?.id} to clipboard.`,
       });
-
-      await loadTicketData();
-      setActiveTab("review");
-      setSuccess("Review decision saved successfully.");
-    } catch (err) {
-      setError(err?.response?.data?.detail || "Failed to save decision.");
-    } finally {
-      setSubmittingDecision(false);
-    }
-  }
-
-  async function handleAssignmentSubmit(e) {
-    e.preventDefault();
-
-    const errors = validateAssignmentForm(assignmentForm);
-    setAssignmentErrors(errors);
-    if (Object.keys(errors).length > 0) return;
-
-    try {
-      setSubmittingAssignment(true);
-      setError("");
-      setSuccess("");
-
-      await assignTicket({
-        ticket_id: ticketId,
-        ...assignmentForm,
-        assigned_by: assignmentForm.assigned_by.trim(),
-        assignment_note: assignmentForm.assignment_note.trim(),
+    } catch {
+      emitToast({
+        type: "error",
+        title: "Copy failed",
+        description: "Clipboard access is not available in this browser.",
       });
-
-      await loadTicketData();
-      setActiveTab("assignment");
-      setSuccess("Ticket assigned successfully.");
-    } catch (err) {
-      setError(err?.response?.data?.detail || "Failed to assign ticket.");
-    } finally {
-      setSubmittingAssignment(false);
     }
-  }
+  };
 
-  function renderOverview() {
+  if (initialLoading) {
     return (
-      <div className="detail-main">
-        <SectionCard title="Ticket Details">
-          <div className="details-grid">
-            <LabelValue label="Ticket ID" value={ticket.ticket_id} />
-            <LabelValue label="Title" value={ticket.title} />
-            <div className="kv">
-              <span className="kv-label">Status</span>
-              <span className="kv-value">
-                <Badge value={ticket.status} type="status" />
-              </span>
-            </div>
-            <LabelValue label="Reporter" value={ticket.reporter} />
-            <LabelValue label="Source" value={ticket.source} />
-            <LabelValue label="Description" value={ticket.description} />
+      <div className="ticket-detail-shell">
+        <div className="detail-loading-state">
+          <div className="detail-loading-spinner" />
+          <div>
+            <h2>Loading ticket details</h2>
+            <p>Fetching the latest review, assignment and AI triage data.</p>
           </div>
-        </SectionCard>
-
-        <SectionCard title="Stored Outcome">
-          <div className="details-grid">
-            <LabelValue label="Final Category" value={ticket.decision?.final_category} />
-            <LabelValue label="Final Priority" value={ticket.decision?.final_priority} />
-            <LabelValue label="Final Team" value={ticket.decision?.final_team} />
-            <LabelValue label="Reviewed By" value={ticket.decision?.reviewed_by} />
-            <LabelValue label="Assigned Team" value={ticket.assignment?.assigned_team} />
-            <LabelValue label="Assigned By" value={ticket.assignment?.assigned_by} />
-            <LabelValue label="Assignment Note" value={ticket.assignment?.assignment_note} />
-          </div>
-        </SectionCard>
+        </div>
       </div>
     );
   }
 
-  function renderAnalysis() {
+  if (!ticket) {
     return (
-      <SectionCard title="AI Analysis">
-        {!ticket.analysis ? (
-          <p>No analysis available.</p>
-        ) : (
-          <div className="details-grid">
-            <div className="kv">
-              <span className="kv-label">Predicted Category</span>
-              <span className="kv-value">
-                <Badge value={ticket.analysis.predicted_category} type="category" />
-              </span>
-            </div>
-            <LabelValue label="Category Confidence" value={ticket.analysis.category_confidence} />
-            <div className="kv">
-              <span className="kv-label">Predicted Priority</span>
-              <span className="kv-value">
-                <Badge value={ticket.analysis.predicted_priority} type="priority" />
-              </span>
-            </div>
-            <LabelValue label="Priority Confidence" value={ticket.analysis.priority_confidence} />
-            <LabelValue label="Suggested Team" value={ticket.analysis.suggested_team} />
-            <LabelValue label="Next Step" value={ticket.analysis.next_step} />
-            <LabelValue label="Summary" value={ticket.analysis.summary} />
-            <LabelValue label="Rationale" value={ticket.analysis.rationale} />
-            <LabelValue label="Model Version" value={ticket.analysis.model_version} />
-            <LabelValue label="Analyzed At" value={ticket.analysis.analyzed_at} />
-          </div>
-        )}
-      </SectionCard>
-    );
-  }
+      <div className="ticket-detail-shell">
+        <div className="detail-page-topbar">
+          <Link className="detail-back-link" to="/">
+            ← Back to dashboard
+          </Link>
+        </div>
 
-  function renderReview() {
-    return (
-      <div className="detail-side">
-        <SectionCard title="Review Decision">
-          <form className="form" onSubmit={handleDecisionSubmit}>
-            <label>
-              Final Category
-              <select
-                value={decisionForm.final_category}
-                onChange={(e) =>
-                  setDecisionForm({ ...decisionForm, final_category: e.target.value })
-                }
-              >
-                {CATEGORY_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-              <FieldError message={decisionErrors.final_category} />
-            </label>
+        {loadError ? (
+          <MessageBanner variant="error" title="Ticket unavailable">
+            {loadError}
+          </MessageBanner>
+        ) : null}
 
-            <label>
-              Final Priority
-              <select
-                value={decisionForm.final_priority}
-                onChange={(e) =>
-                  setDecisionForm({ ...decisionForm, final_priority: e.target.value })
-                }
-              >
-                {PRIORITY_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-              <FieldError message={decisionErrors.final_priority} />
-            </label>
-
-            <label>
-              Final Team
-              <select
-                value={decisionForm.final_team}
-                onChange={(e) =>
-                  setDecisionForm({ ...decisionForm, final_team: e.target.value })
-                }
-              >
-                {TEAM_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-              <FieldError message={decisionErrors.final_team} />
-            </label>
-
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={decisionForm.accepted_ai_suggestion}
-                onChange={(e) =>
-                  setDecisionForm({
-                    ...decisionForm,
-                    accepted_ai_suggestion: e.target.checked,
-                  })
-                }
-              />
-              Accepted AI Suggestion
-            </label>
-
-            <label>
-              Review Comment
-              <textarea
-                rows="4"
-                value={decisionForm.review_comment}
-                onChange={(e) =>
-                  setDecisionForm({ ...decisionForm, review_comment: e.target.value })
-                }
-                maxLength={1000}
-              />
-              <FieldError message={decisionErrors.review_comment} />
-            </label>
-
-            <label>
-              Reviewed By
-              <input
-                value={decisionForm.reviewed_by}
-                onChange={(e) =>
-                  setDecisionForm({ ...decisionForm, reviewed_by: e.target.value })
-                }
-                maxLength={100}
-              />
-              <FieldError message={decisionErrors.reviewed_by} />
-            </label>
-
-            <button type="submit" disabled={submittingDecision || !decisionFormValid}>
-              {submittingDecision ? "Saving..." : "Save Decision"}
-            </button>
-          </form>
-        </SectionCard>
-
-        <SectionCard title="Current Review State">
-          <div className="details-grid">
-            <LabelValue label="Final Category" value={ticket.decision?.final_category} />
-            <LabelValue label="Final Priority" value={ticket.decision?.final_priority} />
-            <LabelValue label="Final Team" value={ticket.decision?.final_team} />
-            <LabelValue label="Accepted AI Suggestion" value={String(ticket.decision?.accepted_ai_suggestion ?? "—")} />
-            <LabelValue label="Review Comment" value={ticket.decision?.review_comment} />
-            <LabelValue label="Reviewed By" value={ticket.decision?.reviewed_by} />
-          </div>
-        </SectionCard>
+        <div className="detail-empty-state detail-empty-state-large">
+          <strong>Ticket not found</strong>
+          <p>
+            No ticket details could be loaded for ID <code>{ticketId}</code>.
+          </p>
+        </div>
       </div>
     );
-  }
-
-  function renderAssignment() {
-    return (
-      <div className="detail-side">
-        <SectionCard title="Assignment">
-          <form className="form" onSubmit={handleAssignmentSubmit}>
-            <label>
-              Assigned Team
-              <select
-                value={assignmentForm.assigned_team}
-                onChange={(e) =>
-                  setAssignmentForm({ ...assignmentForm, assigned_team: e.target.value })
-                }
-              >
-                {TEAM_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-              <FieldError message={assignmentErrors.assigned_team} />
-            </label>
-
-            <label>
-              Assigned By
-              <input
-                value={assignmentForm.assigned_by}
-                onChange={(e) =>
-                  setAssignmentForm({ ...assignmentForm, assigned_by: e.target.value })
-                }
-                maxLength={100}
-              />
-              <FieldError message={assignmentErrors.assigned_by} />
-            </label>
-
-            <label>
-              Assignment Note
-              <textarea
-                rows="4"
-                value={assignmentForm.assignment_note}
-                onChange={(e) =>
-                  setAssignmentForm({ ...assignmentForm, assignment_note: e.target.value })
-                }
-                maxLength={1000}
-              />
-              <FieldError message={assignmentErrors.assignment_note} />
-            </label>
-
-            <button type="submit" disabled={submittingAssignment || !assignmentFormValid}>
-              {submittingAssignment ? "Assigning..." : "Assign Ticket"}
-            </button>
-          </form>
-        </SectionCard>
-
-        <SectionCard title="Current Assignment State">
-          <div className="details-grid">
-            <LabelValue label="Assigned Team" value={ticket.assignment?.assigned_team} />
-            <LabelValue label="Assigned By" value={ticket.assignment?.assigned_by} />
-            <LabelValue label="Assignment Note" value={ticket.assignment?.assignment_note} />
-          </div>
-        </SectionCard>
-      </div>
-    );
-  }
-
-  function renderActiveTab() {
-    if (!ticket) return null;
-
-    if (activeTab === "overview") return renderOverview();
-    if (activeTab === "analysis") return renderAnalysis();
-    if (activeTab === "review") return renderReview();
-    if (activeTab === "assignment") return renderAssignment();
-
-    return renderOverview();
   }
 
   return (
-    <div className="app-shell">
-      <header className="page-header page-header-row">
+    <div className="ticket-detail-shell">
+      <div className="detail-page-topbar">
+        <Link className="detail-back-link" to="/">
+          ← Back to dashboard
+        </Link>
+
+        <div className="detail-action-row">
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => setActiveTab("review")}
+          >
+            Review
+          </button>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => setActiveTab("assignment")}
+          >
+            Assign
+          </button>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={handleCopyId}
+          >
+            Copy ID
+          </button>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
+      </div>
+
+      {loadError ? (
+        <MessageBanner variant="warning" title="Using last successful ticket data">
+          {loadError}
+        </MessageBanner>
+      ) : null}
+
+      <section className="ticket-detail-hero">
         <div>
-          <p className="eyebrow">Ticket Detail</p>
-          <h1>Ticket Details</h1>
-          <p className="subtitle">
-            Review, validate and assign a single ticket.
+          <p className="detail-eyebrow">Ticket #{ticket.id}</p>
+          <h1>{formatLabel(ticket.title, "Untitled ticket")}</h1>
+          <p className="detail-muted">
+            {formatLabel(
+              ticket.summary ?? ticket.description,
+              "No summary is available for this ticket yet."
+            )}
           </p>
         </div>
 
-        <Link className="secondary-button" to="/">
-          ← Back to Dashboard
-        </Link>
-      </header>
+        <div className="ticket-detail-meta">
+          {detailBadges.map((item) => (
+            <Badge key={item.label} variant={item.variant}>
+              {item.label}
+            </Badge>
+          ))}
+        </div>
+      </section>
 
-      <MessageBanner type="error" message={error} />
-      <MessageBanner type="success" message={success} />
-
-      {loading ? (
-        <SectionCard title="Loading">
-          <p>Loading ticket...</p>
+      <section className="ticket-detail-grid">
+        <SectionCard title="Ticket metadata">
+          <div className="detail-stats-grid">
+            <InfoStat label="Status" value={formatLabel(ticket.status, "Open")} />
+            <InfoStat label="Category" value={formatLabel(ticket.category)} />
+            <InfoStat label="Priority" value={formatLabel(ticket.priority)} />
+            <InfoStat label="Confidence" value={formatConfidence(ticket.confidence)} />
+            <InfoStat label="Assignee" value={formatLabel(ticket.assignee, "Unassigned")} />
+            <InfoStat label="Created" value={formatLabel(ticket.createdAt)} />
+            <InfoStat label="Updated" value={formatLabel(ticket.updatedAt)} />
+            <InfoStat
+              label="Review"
+              value={formatLabel(ticket.reviewDecision, "Pending review")}
+            />
+          </div>
         </SectionCard>
-      ) : !ticket ? (
-        <SectionCard title="Not found">
-          <p>Ticket could not be loaded.</p>
+
+        <SectionCard title="Ticket content">
+          {ticket.description ? (
+            <div className="detail-content-block">
+              <p>{ticket.description}</p>
+            </div>
+          ) : (
+            <EmptyInline
+              title="No detailed description"
+              text="This ticket currently has no long-form description."
+            />
+          )}
         </SectionCard>
-      ) : (
-        <>
-          <SectionCard title="Action Bar">
-            <div className="actionbar">
-              <button
-                type="button"
-                className="quick-action-button"
-                onClick={handleAcceptAiRecommendation}
-                disabled={!ticket.analysis || runningQuickAction}
-              >
-                Accept AI Recommendation
-              </button>
+      </section>
 
-              <button
-                type="button"
-                className="quick-action-button"
-                onClick={handleAssignToSuggestedTeam}
-                disabled={!ticket.analysis?.suggested_team || runningQuickAction}
-              >
-                Assign to Suggested Team
-              </button>
+      <section className="detail-tabs-shell">
+        <div className="detail-tabs">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={`detail-tab ${activeTab === tab.key ? "is-active" : ""}`}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-              <button
-                type="button"
-                className="quick-action-button secondary"
-                onClick={applyAiToDecisionForm}
-                disabled={!ticket.analysis}
-              >
-                Set Review Defaults from AI
-              </button>
+        <div className="detail-tab-panel">
+          {activeTab === "overview" ? (
+            <div className="ticket-detail-grid">
+              <SectionCard title="AI recommendation">
+                {ticket.category || ticket.priority || ticket.confidence ? (
+                  <div className="detail-stats-grid">
+                    <InfoStat label="Suggested category" value={formatLabel(ticket.category)} />
+                    <InfoStat label="Suggested priority" value={formatLabel(ticket.priority)} />
+                    <InfoStat
+                      label="Model confidence"
+                      value={formatConfidence(ticket.confidence)}
+                    />
+                  </div>
+                ) : (
+                  <EmptyInline
+                    title="No AI recommendation available"
+                    text="The ticket has not received a triage recommendation yet."
+                  />
+                )}
+              </SectionCard>
 
-              <button
-                type="button"
-                className="quick-action-button secondary"
-                onClick={copyAiTeamToAssignmentForm}
-                disabled={!ticket.analysis?.suggested_team}
-              >
-                Copy AI Team to Assignment
-              </button>
+              <SectionCard title="Current decision context">
+                {ticket.reviewDecision || ticket.reviewReason || ticket.assignee ? (
+                  <div className="detail-stats-grid">
+                    <InfoStat
+                      label="Review decision"
+                      value={formatLabel(ticket.reviewDecision, "Pending")}
+                    />
+                    <InfoStat
+                      label="Review notes"
+                      value={formatLabel(ticket.reviewReason, "No review notes")}
+                    />
+                    <InfoStat
+                      label="Assigned to"
+                      value={formatLabel(ticket.assignee, "Unassigned")}
+                    />
+                  </div>
+                ) : (
+                  <EmptyInline
+                    title="No operational updates yet"
+                    text="This ticket has not been reviewed or assigned yet."
+                  />
+                )}
+              </SectionCard>
             </div>
-          </SectionCard>
+          ) : null}
 
-          <SectionCard title="Navigation">
-            <div className="tabbar">
-              {tabs.map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  className={`tab-button ${activeTab === tab ? "active" : ""}`}
-                  onClick={() => setActiveTab(tab)}
-                >
-                  {tab === "overview" && "Overview"}
-                  {tab === "analysis" && "AI Analysis"}
-                  {tab === "review" && "Review"}
-                  {tab === "assignment" && "Assignment"}
-                </button>
-              ))}
-            </div>
-          </SectionCard>
+          {activeTab === "review" ? (
+            <SectionCard title="Review decision">
+              <form className="detail-form" onSubmit={handleReviewSubmit}>
+                <label className="detail-form-field">
+                  <span>Decision</span>
+                  <select
+                    value={reviewDecision}
+                    onChange={(event) => setReviewDecision(event.target.value)}
+                    disabled={reviewSubmitting}
+                  >
+                    <option value="accepted">Accept</option>
+                    <option value="rejected">Reject</option>
+                    <option value="needs_review">Needs review</option>
+                    <option value="escalated">Escalate</option>
+                  </select>
+                </label>
 
-          {renderActiveTab()}
-        </>
-      )}
+                <label className="detail-form-field">
+                  <span>Reason / notes</span>
+                  <textarea
+                    rows="5"
+                    placeholder="Add reviewer rationale or corrective notes..."
+                    value={reviewReason}
+                    onChange={(event) => setReviewReason(event.target.value)}
+                    disabled={reviewSubmitting}
+                  />
+                </label>
+
+                <div className="detail-action-row">
+                  <button
+                    className="primary-button"
+                    type="submit"
+                    disabled={reviewSubmitting}
+                  >
+                    {reviewSubmitting ? "Saving review..." : "Save review"}
+                  </button>
+                </div>
+              </form>
+            </SectionCard>
+          ) : null}
+
+          {activeTab === "assignment" ? (
+            <SectionCard title="Assignment">
+              <form className="detail-form" onSubmit={handleAssignmentSubmit}>
+                <label className="detail-form-field">
+                  <span>Assignee</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. product-team@company.com"
+                    value={assignmentValue}
+                    onChange={(event) => setAssignmentValue(event.target.value)}
+                    disabled={assignmentSubmitting}
+                  />
+                </label>
+
+                <div className="detail-action-row">
+                  <button
+                    className="primary-button"
+                    type="submit"
+                    disabled={assignmentSubmitting}
+                  >
+                    {assignmentSubmitting ? "Saving assignment..." : "Save assignment"}
+                  </button>
+                </div>
+              </form>
+            </SectionCard>
+          ) : null}
+        </div>
+      </section>
     </div>
   );
 }
