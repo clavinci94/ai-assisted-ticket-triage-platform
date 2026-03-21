@@ -3,15 +3,19 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.application.use_cases.assign_ticket import AssignTicketUseCase
 from app.application.use_cases.get_ticket import GetTicketUseCase
 from app.application.use_cases.list_tickets import ListTicketsUseCase
 from app.application.use_cases.review_triage_decision import ReviewTriageDecisionUseCase
 from app.application.use_cases.save_triage_decision import SaveTriageDecisionUseCase
 from app.application.use_cases.triage_ticket import TriageTicketUseCase
+from app.domain.entities.assignment import Assignment
 from app.infrastructure.ai.ml_classifier import MLClassifier
 from app.infrastructure.persistence.sqlite_ticket_repository import SQLiteTicketRepository
 from app.interfaces.api.dependencies import get_db_session, get_ticket_repository
 from app.interfaces.api.schemas.ticket_schemas import (
+    TicketAssignmentRequest,
+    TicketAssignmentResponse,
     TicketCreateRequest,
     TicketRecordResponse,
     TriageAnalysisResponse,
@@ -34,6 +38,8 @@ def _to_analysis_response(analysis) -> TriageAnalysisResponse:
         suggested_team=analysis.suggested_team,
         next_step=analysis.next_step,
         rationale=analysis.rationale,
+        model_version=analysis.model_version,
+        analyzed_at=analysis.analyzed_at,
     )
 
 
@@ -49,9 +55,19 @@ def _to_decision_response(ticket_id: str, decision) -> TriageDecisionResponse:
     )
 
 
+def _to_assignment_response(ticket_id: str, assignment) -> TicketAssignmentResponse:
+    return TicketAssignmentResponse(
+        ticket_id=ticket_id,
+        assigned_team=assignment.assigned_team,
+        assigned_by=assignment.assigned_by,
+        assignment_note=assignment.assignment_note,
+    )
+
+
 def _to_ticket_record_response(record) -> TicketRecordResponse:
     analysis = _to_analysis_response(record.analysis) if record.analysis else None
     decision = _to_decision_response(record.ticket.id, record.decision) if record.decision else None
+    assignment = _to_assignment_response(record.ticket.id, record.assignment) if record.assignment else None
 
     return TicketRecordResponse(
         ticket_id=record.ticket.id,
@@ -62,6 +78,7 @@ def _to_ticket_record_response(record) -> TicketRecordResponse:
         status=record.ticket.status.value,
         analysis=analysis,
         decision=decision,
+        assignment=assignment,
     )
 
 
@@ -125,6 +142,29 @@ def review_triage_decision(
     updated_record = save_use_case.execute(request.ticket_id, decision)
 
     return _to_decision_response(updated_record.ticket.id, updated_record.decision)
+
+
+@router.post("/assign", response_model=TicketAssignmentResponse)
+def assign_ticket(
+    request: TicketAssignmentRequest,
+    repository: TicketRepositoryDep,
+) -> TicketAssignmentResponse:
+    get_use_case = GetTicketUseCase(repository=repository)
+    record = get_use_case.execute(request.ticket_id)
+
+    if record is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    assignment = Assignment(
+        assigned_team=request.assigned_team,
+        assigned_by=request.assigned_by,
+        assignment_note=request.assignment_note,
+    )
+
+    assign_use_case = AssignTicketUseCase(repository=repository)
+    updated_record = assign_use_case.execute(request.ticket_id, assignment)
+
+    return _to_assignment_response(updated_record.ticket.id, updated_record.assignment)
 
 
 @router.get("", response_model=list[TicketRecordResponse])

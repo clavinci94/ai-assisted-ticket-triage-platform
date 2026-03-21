@@ -169,7 +169,7 @@ function EmptyInline({ title, text }) {
 
 export default function TicketDetailPage() {
   const { ticketId } = useParams();
-  const toastApi = ToastModule.useToast?.() ?? ToastModule.useToasts?.() ?? null;
+  const toastApi = ToastModule.useToast?.() ?? null;
 
   const emitToast = useCallback(
     ({ type = "info", title, description }) => {
