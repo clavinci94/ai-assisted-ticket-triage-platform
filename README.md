@@ -281,22 +281,6 @@ cd frontend
 npm run build
 ```
 
-## Roadmap Status
-
-Implemented in the current codebase:
-
-- Sprint 1: app shell, topbar, sidebar, dashboard restructuring
-- Sprint 2: ticket workbench, filters, pagination, bulk actions, workbench API
-- Sprint 3: extended ticket metadata and persistence fields
-- Sprint 4: workflow actions, comments, escalation, richer detail page
-- Sprint 5: reporting hub, team page, SLA page, settings, expanded analytics
-
-Not included:
-
-- role-based UI for agent, manager, and admin views
-- export feature in the workbench
-- Docker, PostgreSQL, or CI pipelines in the current repository state
-
 ## License
 
 No license file is currently included in this repository.
