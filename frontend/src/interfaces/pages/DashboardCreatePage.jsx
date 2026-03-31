@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../components/ToastProvider";
 import SectionCard from "../components/SectionCard";
-import { previewTriageTicket, triageTicket } from "../lib/api";
-import { DEPARTMENTS } from "../lib/departments";
+import { DEPARTMENTS } from "../../domain/constants/departments";
+import { previewTriageTicket, triageTicket } from "../../infrastructure/http/api";
 
 const CATEGORY_OPTIONS = [
   { value: "", label: "Keine Vorgabe" },

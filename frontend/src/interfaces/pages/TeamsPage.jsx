@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useToast } from "../components/ToastProvider";
-import { fetchDashboardAnalytics } from "../lib/api";
+import { fetchDashboardAnalytics } from "../../infrastructure/http/api";
 
 function TeamStat({ label, value, helper, accent = "neutral" }) {
   return (

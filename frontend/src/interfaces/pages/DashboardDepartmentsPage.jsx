@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarChart, Bar, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { fetchDashboardAnalytics, fetchTickets } from "../lib/api";
 import { useToast } from "../components/ToastProvider";
-import { DEPARTMENTS, normalizeDepartment } from "../lib/departments";
+import { DEPARTMENTS, normalizeDepartment } from "../../domain/constants/departments";
+import { fetchDashboardAnalytics, fetchTickets } from "../../infrastructure/http/api";
 
 const DEPARTMENT_COLOR = "#6366f1";
 

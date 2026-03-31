@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { BrowserRouter, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
-import DashboardLandingPage from "./pages/DashboardLandingPage";
-import DashboardPage from "./pages/DashboardPage";
-import DashboardCreatePage from "./pages/DashboardCreatePage";
-import DashboardDepartmentsPage from "./pages/DashboardDepartmentsPage";
-import DashboardKpisPage from "./pages/DashboardKpisPage";
-import ReportsPage from "./pages/ReportsPage";
-import TeamsPage from "./pages/TeamsPage";
-import SlaPage from "./pages/SlaPage";
-import SettingsPage from "./pages/SettingsPage";
-import TicketDetailPage from "./pages/TicketDetailPage";
-import TicketsPage from "./pages/TicketsPage";
-import { ToastProvider } from "./components/ToastProvider";
-import { getOperatorInitials, loadUserSettings } from "./lib/userSettings";
+import { ToastProvider } from "./interfaces/components/ToastProvider";
+import DashboardCreatePage from "./interfaces/pages/DashboardCreatePage";
+import DashboardDepartmentsPage from "./interfaces/pages/DashboardDepartmentsPage";
+import DashboardKpisPage from "./interfaces/pages/DashboardKpisPage";
+import DashboardLandingPage from "./interfaces/pages/DashboardLandingPage";
+import DashboardPage from "./interfaces/pages/DashboardPage";
+import ReportsPage from "./interfaces/pages/ReportsPage";
+import SettingsPage from "./interfaces/pages/SettingsPage";
+import SlaPage from "./interfaces/pages/SlaPage";
+import TeamsPage from "./interfaces/pages/TeamsPage";
+import TicketDetailPage from "./interfaces/pages/TicketDetailPage";
+import TicketsPage from "./interfaces/pages/TicketsPage";
+import { getOperatorInitials, loadUserSettings } from "./infrastructure/storage/userSettingsStore";
 
 const NAV_SECTIONS = [
   {

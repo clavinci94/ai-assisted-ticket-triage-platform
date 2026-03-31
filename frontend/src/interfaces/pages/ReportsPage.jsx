@@ -12,7 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { useToast } from "../components/ToastProvider";
-import { fetchDashboardAnalytics } from "../lib/api";
+import { fetchDashboardAnalytics } from "../../infrastructure/http/api";
 
 function StatCard({ label, value, helper, accent = "neutral" }) {
   return (

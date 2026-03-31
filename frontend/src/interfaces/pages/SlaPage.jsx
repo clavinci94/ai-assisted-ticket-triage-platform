@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import SlaBadge from "../components/SlaBadge";
 import { useToast } from "../components/ToastProvider";
-import { fetchDashboardAnalytics, fetchTickets } from "../lib/api";
+import { fetchDashboardAnalytics, fetchTickets } from "../../infrastructure/http/api";
 
 function SlaStatCard({ label, value, helper, accent = "neutral" }) {
   return (

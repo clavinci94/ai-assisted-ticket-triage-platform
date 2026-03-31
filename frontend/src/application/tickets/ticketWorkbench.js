@@ -1,4 +1,4 @@
-import { getOperatorName } from "./userSettings";
+import { getOperatorName } from "../../infrastructure/storage/userSettingsStore";
 
 export const SAVED_VIEWS_STORAGE_KEY = "ticket-workbench-saved-views";
 export const COLUMN_VISIBILITY_STORAGE_KEY = "ticket-workbench-columns";

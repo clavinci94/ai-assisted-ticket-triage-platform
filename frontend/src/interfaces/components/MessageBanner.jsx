@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { showToast } from "../lib/toast";
+import { showToast } from "../../application/notifications/toast";
 
 const MessageBanner = ({
   variant,

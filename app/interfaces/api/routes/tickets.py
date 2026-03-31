@@ -40,7 +40,7 @@ from app.interfaces.api.schemas.ticket_schemas import (
     TriageDecisionResponse,
     TriageResponse,
 )
-from app.interfaces.mappers.ticket_mapper import to_domain_ticket
+from app.interfaces.api.mappers.ticket_mapper import to_domain_ticket
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 

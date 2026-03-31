@@ -80,11 +80,29 @@ The current product state covers the full flow from ticket intake to AI recommen
 .
 ├── app
 │   ├── application
+│   │   ├── dto
+│   │   ├── ports
+│   │   └── use_cases
 │   ├── domain
+│   │   ├── constants
+│   │   ├── entities
+│   │   ├── enums
+│   │   └── rules
 │   ├── infrastructure
+│   │   ├── ai
+│   │   ├── config
+│   │   └── persistence
 │   └── interfaces
+│       └── api
+│           ├── mappers
+│           ├── routes
+│           └── schemas
 ├── frontend
 │   ├── src
+│   │   ├── application
+│   │   ├── domain
+│   │   ├── infrastructure
+│   │   └── interfaces
 │   └── package.json
 ├── tests
 │   ├── api
@@ -96,6 +114,22 @@ The current product state covers the full flow from ticket intake to AI recommen
 ├── requirements.txt
 └── pytest.ini
 ```
+
+## Architecture Layers
+
+### Backend
+
+- `domain`: entities, enums, business constants, and domain rules
+- `application`: use cases, DTOs, and abstract ports
+- `infrastructure`: persistence, AI adapters, configuration, and technical services
+- `interfaces`: HTTP routes, schemas, request mapping, and API composition
+
+### Frontend
+
+- `interfaces`: React pages and visual components
+- `application`: UI workflows and workbench orchestration
+- `domain`: frontend business constants and normalization helpers
+- `infrastructure`: HTTP clients and browser storage adapters
 
 ## Current Frontend Navigation
 

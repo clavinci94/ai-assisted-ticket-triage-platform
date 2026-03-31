@@ -4,9 +4,9 @@ import SectionCard from "../components/SectionCard";
 import TicketList from "../components/TicketList";
 import Badge from "../components/Badge";
 import { useToast } from "../components/ToastProvider";
-import { fetchTickets, triageTicket } from "../lib/api";
-import { DEPARTMENTS, normalizeDepartment } from "../lib/departments";
-import { loadUserSettings } from "../lib/userSettings";
+import { DEPARTMENTS, normalizeDepartment } from "../../domain/constants/departments";
+import { fetchTickets, triageTicket } from "../../infrastructure/http/api";
+import { loadUserSettings } from "../../infrastructure/storage/userSettingsStore";
 
 const WORKSPACE_TABS = [
   { id: "overview", label: "Übersicht" },

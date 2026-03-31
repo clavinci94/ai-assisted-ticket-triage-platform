@@ -15,8 +15,8 @@ import {
   fetchTicket,
   saveDecision,
   updateTicketStatus,
-} from "../lib/api";
-import { getOperatorName } from "../lib/userSettings";
+} from "../../infrastructure/http/api";
+import { getOperatorName } from "../../infrastructure/storage/userSettingsStore";
 
 const TABS = [
   { key: "overview", label: "Übersicht" },

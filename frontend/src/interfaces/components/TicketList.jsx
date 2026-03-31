@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import Badge from "./Badge";
-import { COLUMN_OPTIONS, deriveTicketTags, formatSwissDateTime } from "../lib/ticketWorkbench";
+import { COLUMN_OPTIONS, deriveTicketTags, formatSwissDateTime } from "../../application/tickets/ticketWorkbench";
 
 function CompactTicketList({ tickets, loading, selectedTicketId }) {
   if (loading) return <p>Tickets werden geladen...</p>;

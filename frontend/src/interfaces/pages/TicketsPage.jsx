@@ -6,7 +6,7 @@ import FilterChips from "../components/FilterChips";
 import BulkActionsBar from "../components/BulkActionsBar";
 import PaginationControls from "../components/PaginationControls";
 import { useToast } from "../components/ToastProvider";
-import { fetchTicketWorkbench } from "../lib/api";
+import { fetchTicketWorkbench } from "../../infrastructure/http/api";
 import {
   buildDefaultWorkbenchFilters,
   COLUMN_OPTIONS,
@@ -18,7 +18,7 @@ import {
   persistJson,
   SAVED_VIEWS_STORAGE_KEY,
   WORKBENCH_VIEWS,
-} from "../lib/ticketWorkbench";
+} from "../../application/tickets/ticketWorkbench";
 
 const EMPTY_FACETS = {
   statuses: [],

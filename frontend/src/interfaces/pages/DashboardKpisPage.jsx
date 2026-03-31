@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../components/ToastProvider";
 import SectionCard from "../components/SectionCard";
-import { fetchDashboardAnalytics, fetchTickets } from "../lib/api";
+import { fetchDashboardAnalytics, fetchTickets } from "../../infrastructure/http/api";
 import {
   BarChart,
   Bar,
