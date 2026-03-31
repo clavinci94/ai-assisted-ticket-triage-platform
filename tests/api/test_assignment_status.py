@@ -33,6 +33,7 @@ def test_assignment_updates_ticket_status_to_assigned():
     assignment_payload = {
         "ticket_id": ticket_id,
         "assigned_team": "engineering-team",
+        "assignee": "claudio",
         "assigned_by": "claudio",
         "assignment_note": "Assigned after review confirmation.",
     }
@@ -44,6 +45,8 @@ def test_assignment_updates_ticket_status_to_assigned():
 
     ticket_body = ticket_response.json()
     assert ticket_body["status"] == "assigned"
+    assert ticket_body["assignee"] == "claudio"
     assert ticket_body["assignment"] is not None
     assert ticket_body["assignment"]["assigned_team"] == "engineering-team"
+    assert ticket_body["assignment"]["assignee"] == "claudio"
     assert ticket_body["assignment"]["assigned_by"] == "claudio"

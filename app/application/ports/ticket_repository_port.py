@@ -31,7 +31,26 @@ class TicketRepositoryPort(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def update_status(self, ticket_id: str, status: TicketStatus) -> TicketRecord:
+    def update_status(
+        self,
+        ticket_id: str,
+        status: TicketStatus,
+        actor: str | None = None,
+        note: str | None = None,
+    ) -> TicketRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    def update_ticket_fields(
+        self,
+        ticket_id: str,
+        *,
+        priority: str | None = None,
+        team: str | None = None,
+        assignee: str | None = None,
+        due_at=None,
+        sla_breached: bool | None = None,
+    ) -> TicketRecord:
         raise NotImplementedError
 
     @abstractmethod

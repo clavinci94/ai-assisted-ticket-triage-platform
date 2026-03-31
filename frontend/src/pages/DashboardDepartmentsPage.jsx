@@ -110,11 +110,11 @@ export default function DashboardDepartmentsPage() {
     <div className="app-shell dashboard-shell">
       <header className="dashboard-hero">
         <div className="dashboard-hero-copy">
-          <p className="eyebrow">Banken-Übersicht</p>
+          <p className="eyebrow">Reporting</p>
           <h1>Abteilungsübersicht</h1>
           <p className="subtitle">
-            Hier findest du die Ticketverteilung nach Fachbereich und erkennst schnell, welche Bank-Teams aktuell
-            die höchste Auslastung haben.
+            Hier findest du die Ticketverteilung nach Fachbereich und erkennst schnell, welche Bereiche aktuell
+            die höchste Auslastung tragen.
           </p>
           <div className="hero-guide">
             <p>Diese Seite ist der zentrale Einstieg für deine Abteilungssteuerung.</p>
@@ -129,14 +129,15 @@ export default function DashboardDepartmentsPage() {
 
       <section className="dashboard-pathbar">
         <div className="dashboard-breadcrumbs">
-          <span>Dashboard</span>
+          <span>Reporting</span>
           <span>•</span>
           <span>Abteilungen</span>
         </div>
         <div className="dashboard-actions">
-          <button type="button" onClick={() => navigate("/dashboard")}>Dashboard</button>
-          <button type="button" onClick={() => navigate("/dashboard/kpis")}>KPIs</button>
-          <button type="button" onClick={() => navigate("/dashboard/create")}>Ticket erstellen</button>
+          <button type="button" onClick={() => navigate("/reports")}>Reports</button>
+          <button type="button" onClick={() => navigate("/reports/kpis")}>KPIs</button>
+          <button type="button" onClick={() => navigate("/reports/teams")}>Teams</button>
+          <button type="button" onClick={() => navigate("/reports/sla")}>SLA</button>
         </div>
       </section>
 

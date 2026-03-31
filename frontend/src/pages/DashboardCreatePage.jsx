@@ -5,12 +5,53 @@ import SectionCard from "../components/SectionCard";
 import { previewTriageTicket, triageTicket } from "../lib/api";
 import { DEPARTMENTS } from "../lib/departments";
 
+const CATEGORY_OPTIONS = [
+  { value: "", label: "Keine Vorgabe" },
+  { value: "bug", label: "Fehler" },
+  { value: "feature", label: "Funktion" },
+  { value: "support", label: "Support" },
+  { value: "requirement", label: "Anforderung" },
+  { value: "question", label: "Frage" },
+];
+
+const PRIORITY_OPTIONS = [
+  { value: "", label: "Keine Vorgabe" },
+  { value: "low", label: "Niedrig" },
+  { value: "medium", label: "Mittel" },
+  { value: "high", label: "Hoch" },
+  { value: "critical", label: "Kritisch" },
+];
+
 const initialTicketForm = {
   title: "",
   description: "",
   reporter: "",
   source: "internal",
+  category: "",
+  priority: "",
+  team: "",
+  assignee: "",
+  due_at: "",
+  tags_input: "",
 };
+
+function buildTicketPayload(form) {
+  return {
+    title: form.title,
+    description: form.description,
+    reporter: form.reporter || null,
+    source: form.source,
+    category: form.category || null,
+    priority: form.priority || null,
+    team: form.team || null,
+    assignee: form.assignee || null,
+    due_at: form.due_at || null,
+    tags: form.tags_input
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+  };
+}
 
 export default function DashboardCreatePage() {
   const navigate = useNavigate();
@@ -28,7 +69,7 @@ export default function DashboardCreatePage() {
     setSubmitting(true);
 
     try {
-      const preview = await previewTriageTicket(ticketForm);
+      const preview = await previewTriageTicket(buildTicketPayload(ticketForm));
       setPreviewAnalysis(preview);
       setSelectedDepartment(preview.suggested_department || DEPARTMENTS[0]);
       setManualDepartmentMode(false);
@@ -53,7 +94,7 @@ export default function DashboardCreatePage() {
 
     try {
       const result = await triageTicket({
-        ...ticketForm,
+        ...buildTicketPayload(ticketForm),
         department: previewAnalysis.suggested_department,
         department_locked: false,
       });
@@ -80,7 +121,7 @@ export default function DashboardCreatePage() {
 
     try {
       const result = await triageTicket({
-        ...ticketForm,
+        ...buildTicketPayload(ticketForm),
         department: selectedDepartment,
         department_locked: true,
       });
@@ -154,6 +195,70 @@ export default function DashboardCreatePage() {
                 />
               </label>
 
+              <label>
+                Kategorie
+                <select
+                  value={ticketForm.category}
+                  onChange={(event) => setTicketForm({ ...ticketForm, category: event.target.value })}
+                >
+                  {CATEGORY_OPTIONS.map((option) => (
+                    <option key={option.label} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Priorität
+                <select
+                  value={ticketForm.priority}
+                  onChange={(event) => setTicketForm({ ...ticketForm, priority: event.target.value })}
+                >
+                  {PRIORITY_OPTIONS.map((option) => (
+                    <option key={option.label} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Teamkontext
+                <input
+                  value={ticketForm.team}
+                  onChange={(event) => setTicketForm({ ...ticketForm, team: event.target.value })}
+                  placeholder="z. B. Payments Operations Squad"
+                />
+              </label>
+
+              <label>
+                Zuständige Person
+                <input
+                  value={ticketForm.assignee}
+                  onChange={(event) => setTicketForm({ ...ticketForm, assignee: event.target.value })}
+                  placeholder="z. B. claudio"
+                />
+              </label>
+
+              <label>
+                Fälligkeitsdatum
+                <input
+                  type="datetime-local"
+                  value={ticketForm.due_at}
+                  onChange={(event) => setTicketForm({ ...ticketForm, due_at: event.target.value })}
+                />
+              </label>
+
+              <label>
+                Tags
+                <input
+                  value={ticketForm.tags_input}
+                  onChange={(event) => setTicketForm({ ...ticketForm, tags_input: event.target.value })}
+                  placeholder="z. B. Kunde, Mobile App, SLA"
+                />
+              </label>
+
               <div className="form-hint-block">
                 <strong>Zuständige Abteilung</strong>
                 <p>
@@ -164,10 +269,13 @@ export default function DashboardCreatePage() {
 
               <label>
                 Quelle
-                <input
+                <select
                   value={ticketForm.source}
                   onChange={(e) => setTicketForm({ ...ticketForm, source: e.target.value })}
-                />
+                >
+                  <option value="internal">Intern</option>
+                  <option value="external">Extern</option>
+                </select>
               </label>
 
               <button className="primary-button" type="submit" disabled={submitting}>
@@ -182,6 +290,10 @@ export default function DashboardCreatePage() {
             <p>
               Das neue Ticket wird in den Triage-Prozess eingespeist und erhält eine
               Kategorie, Priorität, zuständige Abteilung und Teamempfehlung.
+            </p>
+            <p>
+              Zusätzliche Metadaten wie Tags, Fälligkeit, Teamkontext oder zuständige Person
+              bleiben am Ticket erhalten und stehen danach auch in Workbench und Detailansicht zur Verfügung.
             </p>
             <button className="secondary-button" type="button" onClick={() => navigate("/dashboard")}>
               Zurück zum Dashboard

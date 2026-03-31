@@ -100,7 +100,13 @@ class LitellmClassifier(ClassifierPort):
                 "role": "user",
                 "content": (
                     f"Ticket title: {ticket.title}\n"
-                    f"Ticket description: {ticket.description}" 
+                    f"Ticket description: {ticket.description}\n"
+                    f"Requested category: {ticket.category or 'not provided'}\n"
+                    f"Requested priority: {ticket.priority or 'not provided'}\n"
+                    f"Existing team context: {ticket.team or 'not provided'}\n"
+                    f"Preferred assignee: {ticket.assignee or 'not provided'}\n"
+                    f"Due date: {ticket.due_at or 'not provided'}\n"
+                    f"Tags: {', '.join(ticket.tags) if ticket.tags else 'not provided'}"
                 ),
             },
         ]

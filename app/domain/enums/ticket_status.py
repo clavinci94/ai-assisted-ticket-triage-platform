@@ -6,3 +6,4 @@ class TicketStatus(str, Enum):
     TRIAGED = "triaged"
     REVIEWED = "reviewed"
     ASSIGNED = "assigned"
+    CLOSED = "closed"

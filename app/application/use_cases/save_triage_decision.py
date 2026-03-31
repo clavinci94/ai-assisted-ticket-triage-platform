@@ -10,5 +10,9 @@ class SaveTriageDecisionUseCase:
 
     def execute(self, ticket_id: str, decision: TriageDecision) -> TicketRecord:
         self.repository.attach_decision(ticket_id, decision)
-        updated_record = self.repository.update_status(ticket_id, TicketStatus.REVIEWED)
+        updated_record = self.repository.update_status(
+            ticket_id,
+            TicketStatus.REVIEWED,
+            actor=decision.reviewed_by,
+        )
         return updated_record

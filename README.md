@@ -1,29 +1,54 @@
 # AI-assisted Ticket Triage Platform
 
-A full-stack ticket triage application with a FastAPI backend, a React/Vite frontend, and AI-assisted routing via classic ML and LiteLLM.
+Modern ticket triage and operations dashboard for internal support teams. The project combines a FastAPI backend, a React/Vite frontend, AI-assisted ticket classification via LiteLLM, and a banking-style operator UI focused on review, assignment, SLA tracking, and reporting.
 
-The project supports the full workflow from ticket intake to review, assignment, audit trail, and dashboard analytics. The current UI is localized in German and tailored to a banking-style service and support context.
+The current product state covers the full flow from ticket intake to AI recommendation, manual review, assignment, status handling, audit trail, workbench views, and reporting pages.
 
-## Features
+## Highlights
 
-- Create tickets through a focused dashboard workflow
-- Preview an AI recommendation before saving a ticket
-- Recommend category, priority, responsible team, and department
-- Allow manual department override before persistence
-- Review and correct AI decisions
-- Assign tickets to teams or owners
-- Track history through audit-style events
-- Visualize KPIs, ticket status, priorities, and department distribution
-- Expose REST endpoints with FastAPI and Swagger/OpenAPI
+- AI-assisted ticket intake with preview before persistence
+- Department recommendation with accept-or-override popup
+- Ticket workbench with table views, filters, chips, pagination, and bulk actions
+- Ticket detail workflow for review, assignment, status changes, escalation, and comments
+- Reporting area for KPIs, departments, teams, SLA monitoring, backlog, and trend charts
+- Local settings for operator name and preferred dashboard/reporting start points
+- German-localized frontend tailored to internal bank, operations, and support processes
 
-## Workflow
+## Product Areas
 
-1. A user creates a ticket in the dashboard.
-2. The frontend requests an LLM preview via LiteLLM.
-3. The user accepts the suggested department or overrides it manually.
-4. The ticket is stored and enriched with AI analysis.
-5. Reviewers can confirm or adjust the triage decision.
-6. The ticket can then be assigned and tracked through the dashboard.
+### Ticket Intake
+
+- Create new tickets from the dashboard
+- Generate an AI recommendation before saving
+- Show suggested department and rationale in a popup
+- Let the user accept the recommendation or override the department manually
+
+### Operational Workbench
+
+- `Alle Tickets`
+- `Meine Tickets`
+- `Offene Tickets`
+- `Eskalationen`
+- Search, sorting, multi-filtering, column visibility, pagination, row selection, and bulk actions
+
+### Ticket Workflow
+
+- Review AI triage decisions
+- Assign a team and assignee
+- Update ticket status
+- Escalate high-risk tickets
+- Add comments and internal notes
+- Maintain an audit-style event timeline
+
+### Reporting & Governance
+
+- Dashboard overview with operational KPI blocks
+- KPI reporting page
+- Department analysis
+- Team report
+- SLA / due-date monitoring
+- Ticket volume and backlog development charts
+- Top assignee and processing-time metrics
 
 ## Tech Stack
 
@@ -35,20 +60,21 @@ The project supports the full workflow from ticket intake to review, assignment,
 - Pydantic
 - scikit-learn
 - LiteLLM
+- python-dotenv
 
 ### Frontend
 
 - React
 - Vite
 - React Router
-- Recharts
 - Axios
+- Recharts
 
 ### Persistence
 
-- SQLite (`triage.db`) for local development
+- SQLite for local development (`triage.db`)
 
-## Project Structure
+## Repository Structure
 
 ```text
 .
@@ -71,12 +97,72 @@ The project supports the full workflow from ticket intake to review, assignment,
 └── pytest.ini
 ```
 
-## Getting Started
+## Current Frontend Navigation
+
+- `Startseite`: explanation, usage guidance, and platform overview
+- `Übersicht`: operator dashboard with KPI summaries and action areas
+- `Alle Tickets`: central workbench table
+- `Meine Tickets`: tickets assigned to the configured operator
+- `Offene Tickets`: active open queue
+- `Eskalationen`: high-priority and escalated tickets
+- `Ticket erfassen`: ticket creation with AI preview popup
+- `Reports`: reporting hub
+- `KPIs`
+- `Abteilungen`
+- `Teams`
+- `SLA / Fristen`
+- `Einstellungen`
+
+## API Overview
+
+### Ticket Triage & Workflow
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/tickets/triage` | Classic ML-based triage |
+| `POST` | `/tickets/triage/llm` | Persist ticket with LiteLLM-backed triage |
+| `POST` | `/tickets/triage/llm/preview` | Generate AI recommendation without saving |
+| `POST` | `/tickets/decision` | Save review decision |
+| `POST` | `/tickets/assign` | Assign team and assignee |
+| `POST` | `/tickets/status` | Update ticket status |
+| `POST` | `/tickets/comments` | Add comment or internal note |
+| `POST` | `/tickets/escalate` | Escalate a ticket |
+
+### Ticket Retrieval & Analytics
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/tickets` | Return all ticket records |
+| `GET` | `/tickets/workbench` | Filtered and paginated table data |
+| `GET` | `/tickets/{ticket_id}` | Ticket details including analysis and events |
+| `GET` | `/tickets/analytics` | Dashboard and reporting analytics |
+
+### Other Endpoints
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/admin/retrain` | Retrain the classic ML model |
+| `GET` | `/health` | Service health check |
+
+## Analytics Currently Exposed
+
+The analytics endpoint now provides more than basic status counts. It includes:
+
+- summary stats including total, open, triaged, reviewed, assigned, and closed
+- category, priority, status, department, and team distribution
+- SLA metrics
+- processing time grouped by priority
+- top assignees
+- ticket volume over time
+- backlog development over time
+
+## Quick Start
 
 ### Prerequisites
 
 - Python 3.11+
-- Node.js 20+ and npm
+- Node.js 20+
+- npm
 
 ### 1. Backend Setup
 
@@ -92,7 +178,7 @@ Backend URLs:
 
 - API: `http://127.0.0.1:8000`
 - Swagger UI: `http://127.0.0.1:8000/docs`
-- Health check: `http://127.0.0.1:8000/health`
+- Health: `http://127.0.0.1:8000/health`
 
 ### 2. Frontend Setup
 
@@ -106,13 +192,13 @@ Frontend URL:
 
 - App: `http://127.0.0.1:5173`
 
-The frontend uses `http://127.0.0.1:8000` by default. If needed, you can override it with `VITE_API_BASE_URL`.
+The frontend uses the backend on `http://127.0.0.1:8000` by default. If needed, provide `VITE_API_BASE_URL`.
 
 ## Environment Variables
 
-The current dashboard ticket creation flow uses the LiteLLM-backed endpoints.
+The preferred setup for this repository is LiteLLM proxy usage.
 
-Recommended root `.env`:
+Example `.env`:
 
 ```env
 LITELLM_API_BASE=https://your-litellm-proxy.example.com
@@ -124,79 +210,58 @@ LITELLM_MODEL=azure_ai/gpt-oss-120b
 
 | Variable | Purpose |
 | --- | --- |
-| `LITELLM_API_BASE` | Base URL of the LiteLLM proxy |
-| `LITELLM_API_KEY` | LiteLLM virtual key for proxy access |
-| `LITELLM_MODEL` | Model name used for LLM triage |
-| `OPENAI_BASE_URL` | Supported alias for LiteLLM proxy base URL |
-| `OPENAI_API_KEY` | Supported alias for LiteLLM proxy key |
+| `LITELLM_API_BASE` | LiteLLM proxy base URL |
+| `LITELLM_API_KEY` | LiteLLM virtual key |
+| `LITELLM_MODEL` | Model name for LLM triage |
+| `OPENAI_BASE_URL` | Supported alias for the LiteLLM proxy base URL |
+| `OPENAI_API_KEY` | Supported alias for the LiteLLM proxy key |
 | `AZURE_API_BASE` | Optional direct Azure AI endpoint |
 | `AZURE_API_KEY` | Optional direct Azure AI key |
 
 Notes:
 
-- The preferred setup for this repository is LiteLLM proxy usage.
-- Do not commit real keys.
-- `litellm_config.yaml` can be used for a local LiteLLM proxy, but it is optional for normal app usage.
+- `.env.example` contains the recommended proxy-based template.
+- Do not commit real credentials.
+- `litellm_config.yaml` is only needed if you run your own local LiteLLM proxy.
 
-## API Overview
+## Development Notes
 
-### Core Ticket Endpoints
-
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| `POST` | `/tickets/triage` | Classic ML-based triage |
-| `POST` | `/tickets/triage/llm` | Persist ticket using LiteLLM-backed triage |
-| `POST` | `/tickets/triage/llm/preview` | Preview AI recommendation without saving |
-| `POST` | `/tickets/decision` | Save reviewer decision |
-| `POST` | `/tickets/assign` | Assign a ticket |
-| `GET` | `/tickets` | List all tickets |
-| `GET` | `/tickets/{ticket_id}` | Get ticket details including analysis and history |
-| `GET` | `/tickets/analytics` | Dashboard analytics |
-
-### Admin Endpoint
-
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| `POST` | `/admin/retrain` | Retrain the classic ML model |
-
-### System Endpoint
-
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| `GET` | `/health` | Service health check |
-
-## Frontend Pages
-
-The current frontend is split into dedicated views instead of one overloaded dashboard:
-
-- Start page for explanation and platform orientation
-- Dashboard overview for daily steering and quick navigation
-- Ticket creation page with AI recommendation popup
-- KPI dashboard
-- Department analysis
-- Ticket detail page for review, assignment, and audit trail
+- The local SQLite database is created automatically as `triage.db`.
+- Startup helpers add missing database columns for local schema evolution.
+- The UI is currently localized in German.
+- The workbench and settings area use local browser storage for operator preferences.
+- Existing free-text ticket content is not automatically translated retroactively.
 
 ## Testing
 
-### Backend Tests
+### Backend
 
 ```bash
 pytest
 ```
 
-### Frontend Build Check
+### Frontend
 
 ```bash
 cd frontend
 npm run build
 ```
 
-## Notes
+## Roadmap Status
 
-- The local database is created automatically as `triage.db`.
-- Schema helper functions add missing department-related columns on startup.
-- The frontend creation flow depends on the LiteLLM preview and save endpoints.
-- The repository currently contains backend, frontend, and tests only. Older documentation that referenced Docker, PostgreSQL, or GitHub Actions is no longer accurate for the current state of this repo.
+Implemented in the current codebase:
+
+- Sprint 1: app shell, topbar, sidebar, dashboard restructuring
+- Sprint 2: ticket workbench, filters, pagination, bulk actions, workbench API
+- Sprint 3: extended ticket metadata and persistence fields
+- Sprint 4: workflow actions, comments, escalation, richer detail page
+- Sprint 5: reporting hub, team page, SLA page, settings, expanded analytics
+
+Not included:
+
+- role-based UI for agent, manager, and admin views
+- export feature in the workbench
+- Docker, PostgreSQL, or CI pipelines in the current repository state
 
 ## License
 

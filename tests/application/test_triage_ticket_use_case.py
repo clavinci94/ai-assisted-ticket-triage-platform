@@ -42,8 +42,8 @@ class FakeRepository:
         self.updated_department = (ticket_id, department)
         return None
 
-    def update_status(self, ticket_id, status):
-        self.updated_status = (ticket_id, status)
+    def update_status(self, ticket_id, status, actor=None, note=None):
+        self.updated_status = (ticket_id, status, actor, note)
         return None
 
 
@@ -67,13 +67,16 @@ def test_triage_use_case_sets_triaged_status_and_preserves_audit_fields():
     assert repository.created_ticket is ticket
     assert repository.analysis_attached is not None
     assert repository.updated_department == (ticket.id, "Payments Operations")
-    assert repository.updated_status == (ticket.id, TicketStatus.TRIAGED)
+    assert repository.updated_status == (ticket.id, TicketStatus.TRIAGED, "ai-system", None)
 
     assert result.analysis.model_version == "tfidf-mnb-v1"
     assert result.analysis.analyzed_at == "2026-03-21T17:00:00Z"
     assert result.final_category == TicketCategory.BUG
     assert result.final_team == "engineering-team"
     assert ticket.department == "Payments Operations"
+    assert ticket.category == "bug"
+    assert ticket.priority == "medium"
+    assert ticket.team == "engineering-team"
 
 
 def test_triage_use_case_keeps_manual_department_when_locked():
@@ -98,3 +101,34 @@ def test_triage_use_case_keeps_manual_department_when_locked():
     assert result.analysis.suggested_department == "Payments Operations"
     assert repository.updated_department == (ticket.id, "Risk & Compliance")
     assert ticket.department == "Risk & Compliance"
+
+
+def test_triage_use_case_preserves_existing_ticket_metadata():
+    ticket = Ticket(
+        title="Mobile Banking Störung",
+        description="Anmeldung schlägt fehl und benötigt rasche Bearbeitung.",
+        reporter="alice",
+        source="internal",
+        category="support",
+        priority="high",
+        team="Digital Operations",
+        assignee="claudio",
+        tags=["Mobile App", "VIP"],
+        sla_breached=True,
+    )
+    repository = FakeRepository()
+    classifier = FakeClassifier()
+
+    use_case = TriageTicketUseCase(
+        classifier=classifier,
+        repository=repository,
+    )
+
+    use_case.execute(ticket)
+
+    assert ticket.category == "support"
+    assert ticket.priority == "high"
+    assert ticket.team == "Digital Operations"
+    assert ticket.assignee == "claudio"
+    assert ticket.tags == ["Mobile App", "VIP"]
+    assert ticket.sla_breached is True

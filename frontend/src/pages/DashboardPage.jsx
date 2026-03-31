@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import SectionCard from "../components/SectionCard";
 import TicketList from "../components/TicketList";
 import Badge from "../components/Badge";
 import { useToast } from "../components/ToastProvider";
-import { fetchDashboardAnalytics, fetchTickets, triageTicket } from "../lib/api";
+import { fetchTickets, triageTicket } from "../lib/api";
 import { DEPARTMENTS, normalizeDepartment } from "../lib/departments";
+import { loadUserSettings } from "../lib/userSettings";
 
 const WORKSPACE_TABS = [
   { id: "overview", label: "Übersicht" },
@@ -23,6 +24,54 @@ function StatCard({ label, value, accent, helper }) {
       <strong className="stat-value">{value}</strong>
       <span className="stat-helper">{helper}</span>
     </div>
+  );
+}
+
+function InsightCard({ label, value, description }) {
+  return (
+    <div className="insight-card">
+      <span className="insight-label">{label}</span>
+      <strong>{value}</strong>
+      <p>{description}</p>
+    </div>
+  );
+}
+
+function TicketPreviewPanel({ title, actionLabel, onAction, tickets, emptyMessage }) {
+  return (
+    <SectionCard
+      title={title}
+      actions={
+        onAction ? (
+          <button type="button" className="secondary-button" onClick={onAction}>
+            {actionLabel}
+          </button>
+        ) : null
+      }
+    >
+      {tickets.length ? (
+        <div className="dashboard-ticket-stack">
+          {tickets.map((ticket) => (
+            <Link key={getTicketId(ticket)} to={`/tickets/${getTicketId(ticket)}`} className="dashboard-ticket-row">
+              <div className="dashboard-ticket-copy">
+                <strong>{ticket.title}</strong>
+                <p>{ticket.description || "Keine Beschreibung verfügbar."}</p>
+                <span>{ticket.reporter || "Unbekannter Reporter"} · {normalizeDepartment(ticket.department)}</span>
+              </div>
+              <div className="dashboard-ticket-badges">
+                <Badge value={getTicketPriority(ticket)} type="priority" />
+                <Badge value={ticket.status} type="status" />
+              </div>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="list-empty-state">
+          <strong>Keine Einträge</strong>
+          <p>{emptyMessage}</p>
+        </div>
+      )}
+    </SectionCard>
   );
 }
 
@@ -169,42 +218,43 @@ function buildDistributionFromAccessor(tickets, accessor, orderedLabels = [], in
 }
 
 function getTicketPriority(ticket) {
-  return ticket.final_priority || ticket.priority || ticket.analysis?.predicted_priority || "unknown";
+  return ticket.decision?.final_priority || ticket.priority || ticket.analysis?.predicted_priority || "unknown";
 }
 
 function getTicketCategory(ticket) {
-  return ticket.final_category || ticket.category || ticket.analysis?.predicted_category || "unknown";
+  return ticket.decision?.final_category || ticket.category || ticket.analysis?.predicted_category || "unknown";
 }
 
 function getTicketId(ticket) {
   return ticket.ticket_id || ticket.id;
 }
 
+function getPriorityScore(priority) {
+  return {
+    critical: 4,
+    high: 3,
+    medium: 2,
+    low: 1,
+    unknown: 0,
+  }[normalizeLabel(priority)] || 0;
+}
+
+function isOpenTicket(ticket) {
+  return ["new", "triaged", "reviewed"].includes(normalizeLabel(ticket.status));
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [tickets, setTickets] = useState([]);
-  const [analytics, setAnalytics] = useState(null);
   const [loadingTickets, setLoadingTickets] = useState(false);
   const [submittingTriage, setSubmittingTriage] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [activeWorkspace, setActiveWorkspace] = useState("overview");
-
-  async function loadAnalytics() {
-    try {
-      const data = await fetchDashboardAnalytics();
-      setAnalytics(data);
-    } catch (err) {
-      showToast({
-        type: "error",
-        title: "Analysen konnten nicht geladen werden",
-        message: err?.response?.data?.detail || "Die Dashboard-Analysen konnten nicht geladen werden.",
-      });
-    }
-  }
 
   async function loadTickets({ silent = false } = {}) {
     try {
@@ -214,7 +264,6 @@ export default function DashboardPage() {
 
       const data = await fetchTickets();
       setTickets(data);
-      await loadAnalytics();
     } catch (err) {
       showToast({
         type: "error",
@@ -232,35 +281,39 @@ export default function DashboardPage() {
     loadTickets();
   }, []);
 
-  const dashboardStats = analytics?.stats || {
-    total: tickets.length,
-    triaged: tickets.filter((ticket) => ticket.status === "triaged").length,
-    reviewed: tickets.filter((ticket) => ticket.status === "reviewed").length,
-    assigned: tickets.filter((ticket) => ticket.status === "assigned").length,
+  useEffect(() => {
+    const querySearch = searchParams.get("q") || "";
+    const queryWorkspace = searchParams.get("workspace");
+    const defaultWorkspace = loadUserSettings().dashboardWorkspace;
+
+    setSearch(querySearch);
+
+    if (WORKSPACE_TABS.some((tab) => tab.id === queryWorkspace)) {
+      setActiveWorkspace(queryWorkspace);
+    } else if (WORKSPACE_TABS.some((tab) => tab.id === defaultWorkspace)) {
+      setActiveWorkspace(defaultWorkspace);
+    } else {
+      setActiveWorkspace("overview");
+    }
+  }, [searchParams]);
+
+  const updateUrlState = ({ nextWorkspace = activeWorkspace, nextSearch = search } = {}) => {
+    const nextParams = new URLSearchParams(searchParams);
+
+    if (nextWorkspace) {
+      nextParams.set("workspace", nextWorkspace);
+    } else {
+      nextParams.delete("workspace");
+    }
+
+    if (nextSearch && nextSearch.trim()) {
+      nextParams.set("q", nextSearch.trim());
+    } else {
+      nextParams.delete("q");
+    }
+
+    setSearchParams(nextParams, { replace: true });
   };
-
-  const statusDistribution =
-    analytics?.status_distribution ||
-    buildDistributionFromAccessor(tickets, (ticket) => ticket.status, ["new", "triaged", "reviewed", "assigned"]);
-
-  const priorityDistribution =
-    analytics?.priority_distribution ||
-    buildDistributionFromAccessor(tickets, (ticket) => getTicketPriority(ticket), ["low", "medium", "high", "critical"]);
-
-  const departmentDistribution =
-    analytics?.department_distribution ||
-    buildDistributionFromAccessor(tickets, (ticket) => normalizeDepartment(ticket.department), DEPARTMENTS, true);
-
-  const managementMetrics = analytics?.management_metrics || {
-    reviewed_count: dashboardStats.reviewed,
-    accepted_ai_count: 0,
-    acceptance_rate: 0,
-    assignment_rate: 0,
-    review_coverage: 0,
-  };
-
-  const needsAttentionTickets = analytics?.needs_attention || [];
-  const recentTickets = analytics?.recent_activity || [...tickets].reverse().slice(0, 5);
 
   const filteredTickets = useMemo(() => {
     return tickets.filter((ticket) => {
@@ -269,7 +322,8 @@ export default function DashboardPage() {
       const matchesSearch =
         (ticket.title || "").toLowerCase().includes(normalizedSearch) ||
         (ticket.description || "").toLowerCase().includes(normalizedSearch) ||
-        (ticket.reporter || "").toLowerCase().includes(normalizedSearch);
+        (ticket.reporter || "").toLowerCase().includes(normalizedSearch) ||
+        String(getTicketId(ticket)).toLowerCase().includes(normalizedSearch);
 
       const matchesStatus = statusFilter === "all" ? true : ticket.status === statusFilter;
       const matchesDepartment =
@@ -279,8 +333,68 @@ export default function DashboardPage() {
     });
   }, [tickets, search, statusFilter, departmentFilter]);
 
+  const totalTickets = tickets.length;
+  const triagedCount = tickets.filter((ticket) => ticket.status === "triaged").length;
+  const reviewedCount = tickets.filter((ticket) => ticket.status === "reviewed" || ticket.decision).length;
+  const assignedCount = tickets.filter((ticket) => ticket.status === "assigned" || ticket.assignment).length;
+  const openTicketsCount = tickets.filter((ticket) => isOpenTicket(ticket)).length;
+  const newTicketsCount = tickets.filter((ticket) => ticket.status === "new").length;
+
+  const reviewedTickets = tickets.filter((ticket) => ticket.decision);
+  const acceptedAiCount = reviewedTickets.filter((ticket) => ticket.decision?.accepted_ai_suggestion === true).length;
+  const acceptanceRate = reviewedTickets.length ? Math.round((acceptedAiCount / reviewedTickets.length) * 100) : 0;
+  const reviewCoverage = totalTickets ? Math.round((reviewedCount / totalTickets) * 100) : 0;
+  const assignmentRate = totalTickets ? Math.round((assignedCount / totalTickets) * 100) : 0;
+
+  const statusDistribution = buildDistributionFromAccessor(
+    tickets,
+    (ticket) => ticket.status,
+    ["new", "triaged", "reviewed", "assigned"]
+  );
+
+  const priorityDistribution = buildDistributionFromAccessor(
+    tickets,
+    (ticket) => getTicketPriority(ticket),
+    ["low", "medium", "high", "critical"]
+  );
+
+  const departmentDistribution = buildDistributionFromAccessor(
+    tickets,
+    (ticket) => normalizeDepartment(ticket.department),
+    DEPARTMENTS,
+    true
+  );
+
   const activeDepartments = departmentDistribution.filter((item) => item.value > 0);
   const highlightedDepartments = activeDepartments.slice(0, 5);
+
+  const criticalTickets = useMemo(
+    () =>
+      [...tickets]
+        .filter((ticket) => ["high", "critical"].includes(normalizeLabel(getTicketPriority(ticket))))
+        .sort((left, right) => getPriorityScore(getTicketPriority(right)) - getPriorityScore(getTicketPriority(left)))
+        .slice(0, 5),
+    [tickets]
+  );
+
+  const reviewQueueTickets = useMemo(
+    () => tickets.filter((ticket) => ticket.status === "triaged").slice(0, 5),
+    [tickets]
+  );
+
+  const recentTickets = useMemo(
+    () => [...tickets].reverse().slice(0, 5),
+    [tickets]
+  );
+
+  const needsAttentionTickets = useMemo(
+    () =>
+      [...tickets]
+        .filter((ticket) => ["high", "critical"].includes(normalizeLabel(getTicketPriority(ticket))) || ticket.status === "triaged")
+        .sort((left, right) => getPriorityScore(getTicketPriority(right)) - getPriorityScore(getTicketPriority(left)))
+        .slice(0, 5),
+    [tickets]
+  );
 
   async function handleCreateSampleTicket() {
     try {
@@ -313,6 +427,16 @@ export default function DashboardPage() {
     }
   }
 
+  const handleWorkspaceChange = (workspace) => {
+    setActiveWorkspace(workspace);
+    updateUrlState({ nextWorkspace: workspace });
+  };
+
+  const handleSearchChange = (value) => {
+    setSearch(value);
+    updateUrlState({ nextWorkspace: "tickets", nextSearch: value });
+  };
+
   if (loadingTickets && tickets.length === 0) {
     return (
       <div className="app-shell dashboard-shell">
@@ -325,24 +449,24 @@ export default function DashboardPage() {
     <div className="app-shell dashboard-shell">
       <header className="dashboard-hero">
         <div className="dashboard-hero-copy">
-          <p className="eyebrow">Ticket-Triage-Plattform</p>
-          <h1>Ein Dashboard, klare Wege, keine Doppelungen</h1>
+          <p className="eyebrow">Operative Steuerung</p>
+          <h1>Fokussierte Arbeitsübersicht für Triage und Routing</h1>
           <p className="subtitle">
-            Die Übersicht ist deine Arbeitszentrale. Alle wichtigen Bereiche liegen oben als Schnellzugriffe,
-            während die Startseite nur noch Orientierung und Bedienhilfe liefert.
+            Diese Ansicht bündelt die wichtigsten Kennzahlen, den direkten Zugang zur Warteschlange und die
+            dringendsten Vorgänge für den laufenden Betrieb.
           </p>
           <div className="hero-guide">
             <p>
-              Wechsle hier direkt zwischen Überblick, Warteschlange und operativer Sicht oder springe gezielt in
-              Erfassung, KPIs und Abteilungen. So bleibt der tägliche Arbeitsfluss kompakt und nachvollziehbar.
+              Nutze oben die Schnellzugriffe, springe in die Warteschlange für Such- und Filterarbeit und arbeite
+              kritische Fälle direkt aus den Fokuslisten heraus ab.
             </p>
           </div>
         </div>
 
         <div className="hero-summary-card">
-          <span className="hero-summary-label">Heute im Fokus</span>
-          <strong className="hero-summary-value">{needsAttentionTickets.length}</strong>
-          <span className="hero-summary-text">Tickets mit unmittelbarem Handlungsbedarf</span>
+          <span className="hero-summary-label">Kritische Fälle</span>
+          <strong className="hero-summary-value">{criticalTickets.length}</strong>
+          <span className="hero-summary-text">Tickets mit hoher oder kritischer Priorität im aktuellen Bestand</span>
         </div>
       </header>
 
@@ -353,7 +477,8 @@ export default function DashboardPage() {
           <span>{WORKSPACE_TABS.find((tab) => tab.id === activeWorkspace)?.label || "Übersicht"}</span>
         </div>
         <p className="dashboard-context-copy">
-          Die Startseite erklärt den Aufbau, hier steuerst du die tägliche Arbeit und springst in vertiefte Bereiche.
+          Die Übersicht priorisiert Entscheidungen, die Warteschlange unterstützt die Bearbeitung und die operative
+          Sicht bündelt Dringlichkeit und letzte Aktivitäten.
         </p>
       </section>
 
@@ -366,32 +491,32 @@ export default function DashboardPage() {
           <div className="dashboard-command-grid">
             <DashboardCommandButton
               label="Übersicht"
-              helper="Kennzahlen und Verteilungen"
+              helper="Kernzahlen und Fokuslisten"
               active={activeWorkspace === "overview"}
               emphasis="primary"
-              onClick={() => setActiveWorkspace("overview")}
+              onClick={() => handleWorkspaceChange("overview")}
             />
             <DashboardCommandButton
               label="Warteschlange"
-              helper="Filtern, suchen und öffnen"
+              helper="Suchen, filtern und Tickets öffnen"
               active={activeWorkspace === "tickets"}
               emphasis="primary"
-              onClick={() => setActiveWorkspace("tickets")}
+              onClick={() => handleWorkspaceChange("tickets")}
             />
             <DashboardCommandButton
               label="Nächste Schritte"
-              helper="Dringende Fälle priorisieren"
+              helper="Dringende Fälle zuerst bearbeiten"
               active={activeWorkspace === "operations"}
               emphasis="primary"
-              onClick={() => setActiveWorkspace("operations")}
+              onClick={() => handleWorkspaceChange("operations")}
             />
           </div>
         </div>
 
         <div className="dashboard-command-section">
           <div className="dashboard-command-heading">
-            <span>Sprungmarken</span>
-            <p>Öffne bei Bedarf direkt Erfassung, KPIs oder Abteilungen.</p>
+            <span>Direktaktionen</span>
+            <p>Springe in Erfassung oder Analysebereiche, ohne den Fokus zu verlieren.</p>
           </div>
           <div className="dashboard-command-grid">
             <DashboardCommandButton
@@ -402,15 +527,21 @@ export default function DashboardPage() {
             />
             <DashboardCommandButton
               label="KPIs"
-              helper="Reporting und Trends"
+              helper="Status, Trends und Volumen"
               emphasis="secondary"
-              onClick={() => navigate("/dashboard/kpis")}
+              onClick={() => navigate("/reports/kpis")}
             />
             <DashboardCommandButton
               label="Abteilungen"
-              helper="Verteilung und Ownership"
+              helper="Ownership und Verteilung"
               emphasis="secondary"
-              onClick={() => navigate("/dashboard/departments")}
+              onClick={() => navigate("/reports/departments")}
+            />
+            <DashboardCommandButton
+              label="Reports"
+              helper="Trend- und Backlog-Sicht"
+              emphasis="secondary"
+              onClick={() => navigate("/reports")}
             />
           </div>
         </div>
@@ -425,10 +556,12 @@ export default function DashboardPage() {
       ) : (
         <>
           <section className="stats-grid" aria-label="Dashboard-KPIs">
-            <StatCard label="Gesamt" value={dashboardStats.total} helper="Gesamte Arbeitslast" accent="neutral" />
-            <StatCard label="Triagiert" value={dashboardStats.triaged} helper="Von KI vorqualifiziert" accent="info" />
-            <StatCard label="Geprüft" value={dashboardStats.reviewed} helper="Manuell geprüft" accent="warning" />
-            <StatCard label="Zugewiesen" value={dashboardStats.assigned} helper="Mit Teamzuweisung" accent="success" />
+            <StatCard label="Gesamt" value={totalTickets} helper="Alle Tickets im aktuellen Bestand" accent="neutral" />
+            <StatCard label="Offen" value={openTicketsCount} helper="Noch nicht final weitergeleitete Fälle" accent="info" />
+            <StatCard label="Kritisch" value={criticalTickets.length} helper="Hohe oder kritische Prioritäten" accent="danger" />
+            <StatCard label="Triagiert" value={triagedCount} helper="Für die manuelle Prüfung vorbereitet" accent="info" />
+            <StatCard label="Geprüft" value={reviewedCount} helper="Bereits manuell validiert" accent="warning" />
+            <StatCard label="Aktive Abteilungen" value={activeDepartments.length} helper="Bereiche mit mindestens einem Ticket" accent="success" />
           </section>
 
           <section className="workspace-shell">
@@ -437,17 +570,17 @@ export default function DashboardPage() {
                 <p className="workspace-eyebrow">Arbeitsbereiche</p>
                 <h2>
                   {activeWorkspace === "overview"
-                    ? "Management-Übersicht"
+                    ? "Operativer Überblick"
                     : activeWorkspace === "tickets"
                       ? "Ticket-Warteschlange"
-                      : "Operative Bearbeitung"}
+                      : "Handlungsbedarf und letzte Bewegungen"}
                 </h2>
                 <p>
                   {activeWorkspace === "overview"
-                    ? "Die wichtigsten Kennzahlen und Verteilungen auf einen Blick."
+                    ? "Fokuslisten, Kennzahlen und Verteilungen für schnelle Lagebeurteilung."
                     : activeWorkspace === "tickets"
                       ? "Suche, filtere und springe direkt in den passenden Vorgang."
-                      : "Konzentriere dich auf Tickets mit hohem Handlungsdruck und aktuelle Aktivitäten."}
+                      : "Konzentriere dich auf kritische Tickets und aktuelle Aktivitäten im Betrieb."}
                 </p>
               </div>
               <div className="workspace-header-note">
@@ -459,21 +592,50 @@ export default function DashboardPage() {
             {activeWorkspace === "overview" ? (
               <>
                 <section className="insight-strip">
-                  <div className="insight-card">
-                    <span className="insight-label">Warteschlange sichtbar</span>
-                    <strong>{filteredTickets.length} Tickets</strong>
-                    <p>So viele Tickets passen aktuell zu deinen Filtern in der Warteschlange.</p>
-                  </div>
-                  <div className="insight-card">
-                    <span className="insight-label">Prüfabdeckung</span>
-                    <strong>{managementMetrics.review_coverage}%</strong>
-                    <p>Tickets, die bereits geprüft oder zugewiesen sind.</p>
-                  </div>
-                  <div className="insight-card">
-                    <span className="insight-label">KI-Akzeptanz</span>
-                    <strong>{managementMetrics.acceptance_rate}%</strong>
-                    <p>Akzeptierte KI-Empfehlungen bezogen auf alle Prüfungen.</p>
-                  </div>
+                  <InsightCard
+                    label="Prüfqueue"
+                    value={`${reviewQueueTickets.length} Tickets`}
+                    description="So viele Fälle warten aktuell auf einen manuellen Entscheid."
+                  />
+                  <InsightCard
+                    label="Prüfabdeckung"
+                    value={`${reviewCoverage}%`}
+                    description="Anteil der Tickets, die bereits geprüft oder zugewiesen wurden."
+                  />
+                  <InsightCard
+                    label="KI-Akzeptanz"
+                    value={`${acceptanceRate}%`}
+                    description="Bestätigte KI-Empfehlungen bezogen auf alle bisherigen Prüfungen."
+                  />
+                  <InsightCard
+                    label="Neue Tickets"
+                    value={`${newTicketsCount}`}
+                    description="Frisch eingegangene Fälle, die im aktuellen Bestand noch offen sind."
+                  />
+                </section>
+
+                <section className="dashboard-overview-grid" aria-label="Fokuslisten">
+                  <TicketPreviewPanel
+                    title="Kritische Tickets"
+                    actionLabel="Zur Warteschlange"
+                    onAction={() => handleWorkspaceChange("tickets")}
+                    tickets={criticalTickets}
+                    emptyMessage="Aktuell sind keine kritischen Tickets vorhanden."
+                  />
+                  <TicketPreviewPanel
+                    title="Prüfqueue"
+                    actionLabel="Prüfbereich öffnen"
+                    onAction={() => handleWorkspaceChange("operations")}
+                    tickets={reviewQueueTickets}
+                    emptyMessage="Es warten derzeit keine Tickets auf eine Prüfung."
+                  />
+                  <TicketPreviewPanel
+                    title="Neueste Tickets"
+                    actionLabel="Alle ansehen"
+                    onAction={() => handleWorkspaceChange("tickets")}
+                    tickets={recentTickets}
+                    emptyMessage="Noch keine Ticketaktivität verfügbar."
+                  />
                 </section>
 
                 <section className="analytics-grid" aria-label="Verdichtete Verteilungen">
@@ -502,19 +664,19 @@ export default function DashboardPage() {
 
                 <section className="management-grid" aria-label="Management Summary">
                   <div className="management-card management-card-info">
-                    <span className="management-label">Tickets in Prüfung</span>
-                    <strong className="management-value">{managementMetrics.reviewed_count}</strong>
-                    <span className="management-helper">Bereits manuell geprüfte Tickets</span>
+                    <span className="management-label">Offene Tickets</span>
+                    <strong className="management-value">{openTicketsCount}</strong>
+                    <span className="management-helper">Fälle ohne abgeschlossene Weitergabe</span>
                   </div>
                   <div className="management-card management-card-warning">
-                    <span className="management-label">Abteilungen aktiv</span>
-                    <strong className="management-value">{activeDepartments.length}</strong>
-                    <span className="management-helper">Bereiche mit mindestens einem Ticket</span>
+                    <span className="management-label">Review-Abdeckung</span>
+                    <strong className="management-value">{reviewCoverage}%</strong>
+                    <span className="management-helper">Prüf- und Zuweisungsquote im Bestand</span>
                   </div>
                   <div className="management-card management-card-success">
-                    <span className="management-label">KI übernommen</span>
-                    <strong className="management-value">{managementMetrics.accepted_ai_count}</strong>
-                    <span className="management-helper">Prüfentscheide mit bestätigter Empfehlung</span>
+                    <span className="management-label">Zuweisungsquote</span>
+                    <strong className="management-value">{assignmentRate}%</strong>
+                    <span className="management-helper">Tickets mit dokumentierter Teamzuweisung</span>
                   </div>
                 </section>
               </>
@@ -528,9 +690,9 @@ export default function DashboardPage() {
                       Suchbegriff
                       <input
                         className="toolbar-input"
-                        placeholder="Titel, Beschreibung oder Reporter durchsuchen"
+                        placeholder="Titel, Beschreibung, ID oder Reporter durchsuchen"
                         value={search}
-                        onChange={(event) => setSearch(event.target.value)}
+                        onChange={(event) => handleSearchChange(event.target.value)}
                       />
                     </label>
                     <label>
@@ -563,8 +725,8 @@ export default function DashboardPage() {
                       </select>
                     </label>
                     <p className="filter-hint">
-                      Die Warteschlange zeigt nur noch passende Tickets. Für neue Fälle oder vertiefte Analysen
-                      wechselst du direkt über die Modul-Buttons.
+                      Die Warteschlange ist jetzt dein operativer Suchraum. Für neue Fälle oder verdichtete Analysen
+                      wechselst du direkt über die Schnellzugriffe.
                     </p>
                   </div>
                 </SectionCard>
@@ -584,7 +746,7 @@ export default function DashboardPage() {
                   {!loadingTickets && filteredTickets.length === 0 ? (
                     <div className="list-empty-state">
                       <strong>Keine Tickets passend zu den aktuellen Filtern</strong>
-                      <p>Reduziere die Filter oder wechsle in die KPI- beziehungsweise Abteilungsansicht.</p>
+                      <p>Reduziere die Filter oder springe in die Übersicht zurück.</p>
                     </div>
                   ) : (
                     <TicketList tickets={filteredTickets} loading={loadingTickets && tickets.length === 0} selectedTicketId={null} />
@@ -597,7 +759,7 @@ export default function DashboardPage() {
               <section className="operations-grid" aria-label="Operational Panels">
                 <OperationalPanel
                   title="Handlungsbedarf"
-                  subtitle="Tickets mit hoher Priorität oder noch offenem Triage-Status."
+                  subtitle="Tickets mit hoher Priorität oder noch offenem Prüfbedarf."
                 >
                   {needsAttentionTickets.length ? (
                     <div className="ops-list">
@@ -627,7 +789,7 @@ export default function DashboardPage() {
 
                 <OperationalPanel
                   title="Letzte Aktivitäten"
-                  subtitle="Zuletzt angelegte oder geladene Tickets für schnelles Nachfassen."
+                  subtitle="Zuletzt erfasste Tickets für schnelles Nachfassen."
                 >
                   {recentTickets.length ? (
                     <div className="ops-list">
@@ -644,7 +806,7 @@ export default function DashboardPage() {
                           </div>
                           <div className="ops-list-meta">
                             <span>Reporter: {ticket.reporter || "—"}</span>
-                            <span>Abteilung: {ticket.department || "—"}</span>
+                            <span>Abteilung: {normalizeDepartment(ticket.department) || "—"}</span>
                           </div>
                           <p>{ticket.description || "Keine Beschreibung verfügbar."}</p>
                         </button>
@@ -659,7 +821,6 @@ export default function DashboardPage() {
           </section>
         </>
       )}
-
     </div>
   );
 }

@@ -50,19 +50,32 @@ def test_dashboard_analytics_returns_expected_structure():
     assert "category_distribution" in body
     assert "priority_distribution" in body
     assert "department_distribution" in body
+    assert "team_distribution" in body
     assert "management_metrics" in body
+    assert "sla_metrics" in body
     assert "review_funnel" in body
     assert "ai_acceptance" in body
+    assert "processing_time_by_priority" in body
+    assert "top_assignees" in body
+    assert "ticket_volume_over_time" in body
+    assert "backlog_development" in body
     assert "needs_attention" in body
     assert "recent_activity" in body
 
     assert body["stats"]["total"] >= 2
+    assert "closed" in body["stats"]
     assert isinstance(body["status_distribution"], list)
     assert isinstance(body["category_distribution"], list)
     assert isinstance(body["priority_distribution"], list)
     assert isinstance(body["department_distribution"], list)
+    assert isinstance(body["team_distribution"], list)
     assert isinstance(body["review_funnel"], list)
     assert isinstance(body["ai_acceptance"], list)
+    assert isinstance(body["processing_time_by_priority"], list)
+    assert isinstance(body["top_assignees"], list)
+    assert isinstance(body["ticket_volume_over_time"], list)
+    assert isinstance(body["backlog_development"], list)
     assert isinstance(body["needs_attention"], list)
     assert isinstance(body["recent_activity"], list)
     assert body["management_metrics"]["reviewed_count"] >= 1
+    assert "breached" in body["sla_metrics"]

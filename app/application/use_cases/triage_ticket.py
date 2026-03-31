@@ -30,11 +30,15 @@ class TriageTicketUseCase:
             analyzed_at=analysis.analyzed_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         )
 
+        ticket.category = ticket.category or analysis.predicted_category.value
+        ticket.priority = ticket.priority or analysis.predicted_priority.value
+        ticket.team = ticket.team or analysis.suggested_team
+
         if not ticket.department_locked:
             ticket.department = analysis.suggested_department
         self.repository.attach_analysis(ticket.id, analysis)
         self.repository.update_department(ticket.id, ticket.department)
-        self.repository.update_status(ticket.id, TicketStatus.TRIAGED)
+        self.repository.update_status(ticket.id, TicketStatus.TRIAGED, actor="ai-system")
 
         final_priority = apply_priority_rules(ticket, analysis.predicted_priority)
 

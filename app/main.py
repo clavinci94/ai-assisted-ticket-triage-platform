@@ -9,12 +9,9 @@ from app.interfaces.api.routes.admin import router as admin_router
 from app.interfaces.api.routes.tickets import router as tickets_router
 
 Base.metadata.create_all(bind=engine)
-from app.infrastructure.persistence.db import (
-    ensure_ticket_department_column,
-    ensure_ticket_suggested_department_column,
-)
-ensure_ticket_department_column()
-ensure_ticket_suggested_department_column()
+from app.infrastructure.persistence.db import ensure_ticket_columns
+
+ensure_ticket_columns()
 
 app = FastAPI(
     title="AI-assisted Requirements & Ticket Triage Platform",

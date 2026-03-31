@@ -18,7 +18,16 @@ class MLClassifier(ClassifierPort):
         if self.model is None:
             raise RuntimeError("ML-Modell nicht gefunden. Bitte trainiere das Modell zuerst.")
 
-        text = f"{ticket.title} {ticket.description}"
+        context_parts = [
+            ticket.title,
+            ticket.description,
+            ticket.category or "",
+            ticket.priority or "",
+            ticket.team or "",
+            ticket.assignee or "",
+            " ".join(ticket.tags),
+        ]
+        text = " ".join(part for part in context_parts if part)
         probabilities = self.model.predict_proba([text])[0]
         label = self.model.classes_[probabilities.argmax()]
         confidence = float(probabilities.max())

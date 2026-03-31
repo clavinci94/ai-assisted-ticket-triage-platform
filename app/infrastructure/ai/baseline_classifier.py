@@ -10,7 +10,16 @@ from app.domain.enums.ticket_priority import TicketPriority
 
 class BaselineClassifier(ClassifierPort):
     def analyze(self, ticket: Ticket) -> TriageAnalysis:
-        text = f"{ticket.title} {ticket.description}".lower()
+        context_parts = [
+            ticket.title,
+            ticket.description,
+            ticket.category or "",
+            ticket.priority or "",
+            ticket.team or "",
+            ticket.assignee or "",
+            " ".join(ticket.tags),
+        ]
+        text = " ".join(part for part in context_parts if part).lower()
         department = infer_department_from_text(text, fallback=ticket.department)
 
         category = TicketCategory.REQUIREMENT

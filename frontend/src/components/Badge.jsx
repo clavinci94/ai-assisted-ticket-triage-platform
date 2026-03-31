@@ -9,6 +9,7 @@ export default function Badge({ value, type = "default" }) {
     else if (normalized === "triaged") className += " badge-info";
     else if (normalized === "reviewed") className += " badge-warning";
     else if (normalized === "assigned") className += " badge-success";
+    else if (normalized === "closed") className += " badge-neutral";
   }
 
   if (type === "priority") {
@@ -35,6 +36,7 @@ function translateBadgeValue(value, type) {
         triaged: "Triagiert",
         reviewed: "Geprüft",
         assigned: "Zugewiesen",
+        closed: "Geschlossen",
       }[normalized] || value
     );
   }

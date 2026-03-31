@@ -177,24 +177,25 @@ export default function DashboardKpisPage() {
     <div className="app-shell dashboard-shell">
       <section className="dashboard-hero">
         <div className="dashboard-hero-copy">
-          <p className="eyebrow">Kennzahlen</p>
+          <p className="eyebrow">Reporting</p>
           <h1>Leistungskennzahlen</h1>
           <p className="subtitle">
-            Ein eigener KPI-Bereich mit Übersicht zu Status, Kategorien und Prioritäten.
+            KPI-Report für Status, Prioritäten, Prozessverteilung und den aktuellen operativen Gesundheitszustand.
           </p>
         </div>
       </section>
 
       <section className="dashboard-pathbar">
         <div className="dashboard-breadcrumbs">
-          <span>Dashboard</span>
+          <span>Reporting</span>
           <span>•</span>
           <span>KPIs</span>
         </div>
         <div className="dashboard-actions">
-          <button type="button" onClick={() => navigate("/dashboard")}>Dashboard</button>
-          <button type="button" onClick={() => navigate("/dashboard/create")}>Ticket erstellen</button>
-          <button type="button" onClick={() => navigate("/dashboard/departments")}>Abteilungen</button>
+          <button type="button" onClick={() => navigate("/reports")}>Reports</button>
+          <button type="button" onClick={() => navigate("/reports/departments")}>Abteilungen</button>
+          <button type="button" onClick={() => navigate("/reports/teams")}>Teams</button>
+          <button type="button" onClick={() => navigate("/reports/sla")}>SLA</button>
         </div>
       </section>
 

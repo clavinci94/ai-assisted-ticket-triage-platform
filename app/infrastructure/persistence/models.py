@@ -13,6 +13,13 @@ class TicketRecordModel(Base):
     reporter = Column(String(100), nullable=True)
     source = Column(String(50), nullable=False)
     department = Column(String(100), nullable=False, default="Bank-IT Support")
+    category = Column(String(50), nullable=True)
+    priority = Column(String(50), nullable=True)
+    team = Column(String(100), nullable=True)
+    assignee = Column(String(100), nullable=True)
+    due_at = Column(DateTime, nullable=True)
+    tags = Column(Text, nullable=True)
+    sla_breached = Column(Boolean, nullable=False, default=False)
     status = Column(String(50), nullable=False)
 
     predicted_category = Column(String(50), nullable=True)

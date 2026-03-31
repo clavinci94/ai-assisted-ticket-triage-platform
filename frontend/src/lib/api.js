@@ -11,6 +11,11 @@ export async function fetchTickets() {
   return response.data;
 }
 
+export async function fetchTicketWorkbench(params = {}) {
+  const response = await api.get("/tickets/workbench", { params });
+  return response.data;
+}
+
 export async function fetchTicket(ticketId) {
   const response = await api.get(`/tickets/${ticketId}`);
   return response.data;
@@ -36,6 +41,20 @@ export async function assignTicket(payload) {
   return response.data;
 }
 
+export async function updateTicketStatus(payload) {
+  const response = await api.post("/tickets/status", payload);
+  return response.data;
+}
+
+export async function addTicketComment(payload) {
+  const response = await api.post("/tickets/comments", payload);
+  return response.data;
+}
+
+export async function escalateTicket(payload) {
+  const response = await api.post("/tickets/escalate", payload);
+  return response.data;
+}
 
 export async function fetchDashboardAnalytics() {
   const response = await api.get("/tickets/analytics");

@@ -1,15 +1,50 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import * as ToastModule from "../components/ToastProvider";
+import ActivityTimeline from "../components/ActivityTimeline";
+import AssigneePicker from "../components/AssigneePicker";
 import Badge from "../components/Badge";
+import CommentComposer from "../components/CommentComposer";
 import MessageBanner from "../components/MessageBanner";
 import SectionCard from "../components/SectionCard";
-import { api } from "../lib/api";
+import SlaBadge from "../components/SlaBadge";
+import * as ToastModule from "../components/ToastProvider";
+import {
+  addTicketComment,
+  assignTicket,
+  escalateTicket,
+  fetchTicket,
+  saveDecision,
+  updateTicketStatus,
+} from "../lib/api";
+import { getOperatorName } from "../lib/userSettings";
 
 const TABS = [
   { key: "overview", label: "Übersicht" },
   { key: "review", label: "Prüfung" },
   { key: "assignment", label: "Zuweisung" },
+];
+
+const CATEGORY_OPTIONS = [
+  { value: "bug", label: "Fehler" },
+  { value: "feature", label: "Funktion" },
+  { value: "support", label: "Support" },
+  { value: "requirement", label: "Anforderung" },
+  { value: "question", label: "Frage" },
+];
+
+const PRIORITY_OPTIONS = [
+  { value: "low", label: "Niedrig" },
+  { value: "medium", label: "Mittel" },
+  { value: "high", label: "Hoch" },
+  { value: "critical", label: "Kritisch" },
+];
+
+const STATUS_OPTIONS = [
+  { value: "new", label: "Neu" },
+  { value: "triaged", label: "Triagiert" },
+  { value: "reviewed", label: "Geprüft" },
+  { value: "assigned", label: "Zugewiesen" },
+  { value: "closed", label: "Geschlossen" },
 ];
 
 function readErrorMessage(error) {
@@ -27,18 +62,8 @@ function pickFirst(...values) {
       return value;
     }
   }
-  return null;
-}
 
-function formatConfidence(value) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return "—";
-  }
-  const numeric = Number(value);
-  if (numeric > 0 && numeric <= 1) {
-    return `${Math.round(numeric * 100)}%`;
-  }
-  return `${Math.round(numeric)}%`;
+  return null;
 }
 
 function formatLabel(value, fallback = "Nicht verfügbar") {
@@ -55,7 +80,31 @@ function formatDateTime(value) {
     return String(value);
   }
 
-  return date.toLocaleString();
+  return new Intl.DateTimeFormat("de-CH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function formatConfidence(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "—";
+  }
+
+  const numeric = Number(value);
+  if (numeric > 0 && numeric <= 1) {
+    return `${Math.round(numeric * 100)}%`;
+  }
+
+  return `${Math.round(numeric)}%`;
+}
+
+function formatTags(tags) {
+  if (!Array.isArray(tags) || !tags.length) {
+    return "Keine Tags";
+  }
+
+  return tags.join(", ");
 }
 
 function normalizeEvent(event, index) {
@@ -82,6 +131,7 @@ function normalizeEvent(event, index) {
 
 function formatCategory(value) {
   const normalized = String(value || "").toLowerCase();
+
   return (
     {
       bug: "Fehler",
@@ -96,6 +146,7 @@ function formatCategory(value) {
 
 function formatPriority(value) {
   const normalized = String(value || "").toLowerCase();
+
   return (
     {
       low: "Niedrig",
@@ -109,12 +160,14 @@ function formatPriority(value) {
 
 function formatStatus(value) {
   const normalized = String(value || "").toLowerCase();
+
   return (
     {
       new: "Neu",
       triaged: "Triagiert",
       reviewed: "Geprüft",
       assigned: "Zugewiesen",
+      closed: "Geschlossen",
       open: "Offen",
     }[normalized] || formatLabel(value)
   );
@@ -122,6 +175,7 @@ function formatStatus(value) {
 
 function formatReviewDecision(value) {
   const normalized = String(value || "").toLowerCase();
+
   return (
     {
       accepted: "Akzeptiert",
@@ -133,164 +187,75 @@ function formatReviewDecision(value) {
   );
 }
 
-function formatEventType(value) {
-  const normalized = String(value || "").toLowerCase();
-  return (
-    {
-      ticket_created: "Ticket erstellt",
-      triage_completed: "Triage abgeschlossen",
-      review_saved: "Prüfentscheid gespeichert",
-      assignment_saved: "Zuweisung gespeichert",
-      status_changed: "Status geändert",
-      unknown: "Unbekannt",
-    }[normalized] || formatLabel(value)
-  );
-}
-
 function normalizeTicket(ticket) {
   if (!ticket || typeof ticket !== "object") {
     return null;
   }
 
-  const finalCategory = pickFirst(
+  const category = pickFirst(
     ticket.final_category,
     ticket.category,
-    ticket.predicted_category,
-    ticket.ai_category,
     ticket.decision?.final_category,
     ticket.analysis?.predicted_category,
-    ticket.ai_prediction?.category
+    "unknown"
   );
-  const department = pickFirst(
-    ticket.department,
-    ticket.analysis?.suggested_department,
-    ticket.department_name,
-    ticket.area,
-    "Bank-IT Support"
-  );
-
-  const finalPriority = pickFirst(
+  const priority = pickFirst(
     ticket.final_priority,
     ticket.priority,
-    ticket.predicted_priority,
-    ticket.ai_priority,
     ticket.decision?.final_priority,
     ticket.analysis?.predicted_priority,
-    ticket.ai_prediction?.priority
+    "medium"
   );
-
+  const team = pickFirst(
+    ticket.team,
+    ticket.assignment?.assigned_team,
+    ticket.decision?.final_team,
+    ticket.analysis?.suggested_team
+  );
   const assignee = pickFirst(
-    ticket.assigned_to,
     ticket.assignee,
+    ticket.assignment?.assignee,
     ticket.owner,
-    ticket.final_assignee,
-    ticket.assignment?.assigned_team
+    ticket.assigned_to
   );
-
-  const confidence = pickFirst(
-    ticket.confidence,
-    ticket.ai_confidence,
-    ticket.prediction_confidence,
-    ticket.analysis?.category_confidence,
-    ticket.ai_prediction?.confidence
-  );
-
-  const summary = pickFirst(
-    ticket.summary,
-    ticket.ai_summary,
-    ticket.generated_summary,
-    ticket.analysis?.summary
-  );
-
-  const description = pickFirst(
-    ticket.description,
-    ticket.body,
-    ticket.text,
-    ticket.content
-  );
-
-  const rationale = pickFirst(
-    ticket.rationale,
-    ticket.analysis?.rationale,
-    ticket.analysis?.explanation,
-    ticket.ai_rationale
-  );
-
-  const nextStep = pickFirst(
-    ticket.next_step,
-    ticket.analysis?.next_step,
-    ticket.ai_next_step
-  );
-
-  const suggestedTeam = pickFirst(
-    ticket.suggested_team,
-    ticket.analysis?.suggested_team,
-    ticket.ai_team
-  );
-
-  const title = pickFirst(
-    ticket.title,
-    ticket.subject,
-    summary,
-    `Ticket #${pickFirst(ticket.id, ticket.ticket_id, ticket.ticketId, "Unknown")}`
-  );
-
-  const status = pickFirst(
-    ticket.status,
-    ticket.state,
-    ticket.workflow_status,
-    "open"
-  );
-
-  const createdAt = pickFirst(
-    ticket.created_at,
-    ticket.createdAt,
-    ticket.timestamp
-  );
-
-  const updatedAt = pickFirst(
-    ticket.updated_at,
-    ticket.updatedAt,
-    createdAt
-  );
-
-  const reviewDecision = pickFirst(
-    ticket.review_decision,
-    ticket.final_decision,
-    ticket.decision?.final_category ? `${ticket.decision.final_category} / ${ticket.decision.final_priority}` : null
-  );
-
-  const reviewReason = pickFirst(
-    ticket.review_reason,
-    ticket.reason,
-    ticket.notes,
-    ticket.decision?.review_comment
-  );
-
-  const events = Array.isArray(ticket.events)
-    ? ticket.events.map(normalizeEvent)
-    : [];
+  const reviewDecision = ticket.decision
+    ? ticket.decision.accepted_ai_suggestion
+      ? "accepted"
+      : "rejected"
+    : "pending";
 
   return {
     raw: ticket,
     id: pickFirst(ticket.id, ticket.ticket_id, ticket.ticketId, "Unknown"),
-    title,
-    description,
-    summary,
-    category: finalCategory,
-    priority: finalPriority,
-    department,
-    rationale,
-    nextStep,
-    suggestedTeam,
+    title: pickFirst(ticket.title, ticket.subject, "Unbenanntes Ticket"),
+    description: pickFirst(ticket.description, ticket.body, ticket.text),
+    summary: pickFirst(ticket.analysis?.summary, ticket.summary),
+    reporter: pickFirst(ticket.reporter),
+    department: pickFirst(
+      ticket.department,
+      ticket.analysis?.suggested_department,
+      "Bank-IT Support"
+    ),
+    category,
+    priority,
+    predictedCategory: pickFirst(ticket.analysis?.predicted_category),
+    predictedPriority: pickFirst(ticket.analysis?.predicted_priority),
+    suggestedDepartment: pickFirst(ticket.analysis?.suggested_department, ticket.department),
+    suggestedTeam: pickFirst(ticket.analysis?.suggested_team),
+    rationale: pickFirst(ticket.analysis?.rationale),
+    nextStep: pickFirst(ticket.analysis?.next_step),
+    confidence: pickFirst(ticket.analysis?.category_confidence),
+    team,
     assignee,
-    confidence,
-    status,
-    createdAt,
-    updatedAt,
+    dueAt: pickFirst(ticket.due_at, ticket.dueAt),
+    tags: Array.isArray(ticket.tags) ? ticket.tags : [],
+    slaBreached: Boolean(ticket.sla_breached ?? ticket.slaBreached),
+    status: pickFirst(ticket.status, "new"),
+    createdAt: pickFirst(ticket.created_at, ticket.createdAt),
+    updatedAt: pickFirst(ticket.updated_at, ticket.updatedAt, ticket.created_at),
     reviewDecision,
-    reviewReason,
-    events,
+    reviewReason: pickFirst(ticket.decision?.review_comment),
+    events: Array.isArray(ticket.events) ? ticket.events.map(normalizeEvent) : [],
   };
 }
 
@@ -312,28 +277,10 @@ function EmptyInline({ title, text }) {
   );
 }
 
-function EventItem({ event }) {
-  return (
-    <div className="detail-event-item">
-      <div className="detail-event-marker" />
-      <div className="detail-event-content">
-        <div className="detail-event-topline">
-          <strong>{event.summary}</strong>
-          <span>{formatDateTime(event.createdAt)}</span>
-        </div>
-        <div className="detail-event-meta">
-          <span className="detail-event-type">{formatEventType(event.eventType)}</span>
-          <span>{event.actor ? `Akteur: ${event.actor}` : "Akteur: System"}</span>
-        </div>
-        {event.details ? <p>{event.details}</p> : null}
-      </div>
-    </div>
-  );
-}
-
 export default function TicketDetailPage() {
   const { ticketId } = useParams();
   const toastApi = ToastModule.useToast?.() ?? null;
+  const currentOperator = useMemo(() => getOperatorName(), []);
 
   const emitToast = useCallback(
     ({ type = "info", title, description }) => {
@@ -355,13 +302,11 @@ export default function TicketDetailPage() {
         return;
       }
 
-      if (toastApi?.showToast) {
-        toastApi.showToast({
-          type,
-          title,
-          description,
-        });
-      }
+      toastApi?.showToast?.({
+        type,
+        title,
+        message: description,
+      });
     },
     [toastApi]
   );
@@ -373,11 +318,51 @@ export default function TicketDetailPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [assignmentSubmitting, setAssignmentSubmitting] = useState(false);
-  const [reviewDecision, setReviewDecision] = useState("accepted");
-  const [reviewReason, setReviewReason] = useState("");
-  const [assignmentValue, setAssignmentValue] = useState("");
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [escalating, setEscalating] = useState(false);
 
-  const fetchTicket = useCallback(
+  const [reviewForm, setReviewForm] = useState({
+    decision: "accepted",
+    category: "bug",
+    priority: "medium",
+    team: "",
+    reason: "",
+  });
+  const [assignmentForm, setAssignmentForm] = useState({
+    team: "",
+    assignee: "",
+    note: "",
+  });
+  const [statusForm, setStatusForm] = useState({
+    status: "triaged",
+    note: "",
+  });
+
+  const hydrateForms = useCallback((normalizedTicket) => {
+    if (!normalizedTicket) {
+      return;
+    }
+
+    setReviewForm({
+      decision: normalizedTicket.reviewDecision || "accepted",
+      category: normalizedTicket.category || "bug",
+      priority: normalizedTicket.priority || "medium",
+      team: normalizedTicket.team || normalizedTicket.suggestedTeam || "",
+      reason: normalizedTicket.reviewReason || "",
+    });
+    setAssignmentForm({
+      team: normalizedTicket.team || normalizedTicket.suggestedTeam || "",
+      assignee: normalizedTicket.assignee || "",
+      note: "",
+    });
+    setStatusForm({
+      status: normalizedTicket.status || "triaged",
+      note: "",
+    });
+  }, []);
+
+  const loadTicket = useCallback(
     async ({ silent = false } = {}) => {
       if (!ticketId) {
         setLoadError("Die Ticket-ID fehlt.");
@@ -392,12 +377,10 @@ export default function TicketDetailPage() {
       }
 
       try {
-        const response = await api.get(`/tickets/${ticketId}`);
-        const normalized = normalizeTicket(response.data);
-        setTicket(normalized);
-        setAssignmentValue(normalized?.assignee ?? "");
-        setReviewDecision(normalized?.reviewDecision ?? "accepted");
-        setReviewReason(normalized?.reviewReason ?? "");
+        const response = await fetchTicket(ticketId);
+        const normalizedTicket = normalizeTicket(response);
+        setTicket(normalizedTicket);
+        hydrateForms(normalizedTicket);
         setLoadError("");
       } catch (error) {
         const message = readErrorMessage(error);
@@ -412,70 +395,69 @@ export default function TicketDetailPage() {
         setRefreshing(false);
       }
     },
-    [ticketId, emitToast]
+    [emitToast, hydrateForms, ticketId]
   );
 
   useEffect(() => {
-    fetchTicket();
-  }, [fetchTicket]);
+    loadTicket();
+  }, [loadTicket]);
 
-  const detailBadges = useMemo(
-    () => [
-      {
-        label: formatStatus(ticket?.status || "open"),
-        variant: "neutral",
-      },
-      {
-        label: `Kategorie: ${formatCategory(ticket?.category)}`,
-        variant: "info",
-      },
-      {
-        label: `Priorität: ${formatPriority(ticket?.priority)}`,
-        variant: "warning",
-      },
-      {
-        label: `Trefferquote: ${formatConfidence(ticket?.confidence)}`,
-        variant: "success",
-      },
-    ],
-    [ticket]
-  );
+  const detailBadges = useMemo(() => {
+    if (!ticket) {
+      return [];
+    }
 
-  const handleReviewSubmit = async (event) => {
+    return [
+      { value: ticket.status, type: "status" },
+      { value: ticket.category, type: "category" },
+      { value: ticket.priority, type: "priority" },
+    ];
+  }, [ticket]);
+
+  async function refreshWithSuccess(title, description) {
+    await loadTicket({ silent: true });
+    emitToast({
+      type: "success",
+      title,
+      description,
+    });
+  }
+
+  async function handleReviewSubmit(event) {
     event.preventDefault();
 
     if (!ticket?.id) {
-      emitToast({
-        type: "error",
-        title: "Prüfung fehlgeschlagen",
-        description: "Aktuell ist kein Ticket geladen.",
-      });
       return;
     }
-
-    const normalizedCategory = (ticket.category || "bug").toLowerCase();
-    const normalizedPriority = (ticket.priority || "medium").toLowerCase();
 
     setReviewSubmitting(true);
 
     try {
-      await api.post("/tickets/decision", {
+      await saveDecision({
         ticket_id: ticket.id,
-        final_category: normalizedCategory,
-        final_priority: normalizedPriority,
-        final_team: assignmentValue.trim() || ticket.assignee || "triage-team",
-        accepted_ai_suggestion: reviewDecision === "accepted",
-        review_comment: reviewReason,
-        reviewed_by: "claudio",
+        final_category: reviewForm.category,
+        final_priority: reviewForm.priority,
+        final_team: reviewForm.team.trim() || ticket.team || ticket.suggestedTeam || "triage-team",
+        accepted_ai_suggestion: reviewForm.decision === "accepted",
+        review_comment: reviewForm.reason.trim() || null,
+        reviewed_by: currentOperator,
       });
 
-      emitToast({
-        type: "success",
-        title: "Prüfung gespeichert",
-        description: `Der Entscheid "${formatReviewDecision(reviewDecision)}" wurde gespeichert.`,
-      });
+      if (reviewForm.decision === "escalated") {
+        await escalateTicket({
+          ticket_id: ticket.id,
+          escalated_by: currentOperator,
+          reason: reviewForm.reason.trim() || "Eskalation aus der Prüfentscheidung",
+          target_team: assignmentForm.team.trim() || reviewForm.team.trim() || ticket.team || null,
+          assignee: assignmentForm.assignee.trim() || ticket.assignee || null,
+          priority: "critical",
+        });
+      }
 
-      await fetchTicket({ silent: true });
+      await refreshWithSuccess(
+        "Prüfung gespeichert",
+        `Der Entscheid "${formatReviewDecision(reviewForm.decision)}" wurde übernommen.`
+      );
     } catch (error) {
       emitToast({
         type: "error",
@@ -485,25 +467,20 @@ export default function TicketDetailPage() {
     } finally {
       setReviewSubmitting(false);
     }
-  };
+  }
 
-  const handleAssignmentSubmit = async (event) => {
+  async function handleAssignmentSubmit(event) {
     event.preventDefault();
 
     if (!ticket?.id) {
-      emitToast({
-        type: "error",
-        title: "Zuweisung fehlgeschlagen",
-        description: "Aktuell ist kein Ticket geladen.",
-      });
       return;
     }
 
-    if (!assignmentValue.trim()) {
+    if (!assignmentForm.team.trim()) {
       emitToast({
         type: "error",
         title: "Zuweisung fehlgeschlagen",
-        description: "Bitte gib vor dem Speichern ein Team oder eine zuständige Person ein.",
+        description: "Bitte hinterlege mindestens ein zuständiges Team.",
       });
       return;
     }
@@ -511,20 +488,18 @@ export default function TicketDetailPage() {
     setAssignmentSubmitting(true);
 
     try {
-      await api.post("/tickets/assign", {
+      await assignTicket({
         ticket_id: ticket.id,
-        assigned_team: assignmentValue.trim(),
-        assigned_by: "claudio",
-        assignment_note: "Zuweisung aus der Ticketdetailansicht",
+        assigned_team: assignmentForm.team.trim(),
+        assignee: assignmentForm.assignee.trim() || null,
+        assigned_by: currentOperator,
+        assignment_note: assignmentForm.note.trim() || "Zuweisung aus der Ticketdetailansicht",
       });
 
-      emitToast({
-        type: "success",
-        title: "Zuweisung gespeichert",
-        description: `Das Ticket wurde ${assignmentValue.trim()} zugewiesen.`,
-      });
-
-      await fetchTicket({ silent: true });
+      await refreshWithSuccess(
+        "Zuweisung gespeichert",
+        `Das Ticket wurde ${assignmentForm.team.trim()} zugewiesen.`
+      );
     } catch (error) {
       emitToast({
         type: "error",
@@ -534,18 +509,154 @@ export default function TicketDetailPage() {
     } finally {
       setAssignmentSubmitting(false);
     }
-  };
+  }
 
-  const handleRefresh = async () => {
-    await fetchTicket({ silent: true });
+  async function handleStatusSubmit(event) {
+    event.preventDefault();
+
+    if (!ticket?.id) {
+      return;
+    }
+
+    setStatusSubmitting(true);
+
+    try {
+      await updateTicketStatus({
+        ticket_id: ticket.id,
+        status: statusForm.status,
+        actor: currentOperator,
+        note: statusForm.note.trim() || null,
+      });
+
+      await refreshWithSuccess(
+        "Status aktualisiert",
+        `Der Ticketstatus ist jetzt ${formatStatus(statusForm.status)}.`
+      );
+    } catch (error) {
+      emitToast({
+        type: "error",
+        title: "Statusänderung fehlgeschlagen",
+        description: readErrorMessage(error),
+      });
+    } finally {
+      setStatusSubmitting(false);
+    }
+  }
+
+  async function handleCloseTicket() {
+    if (!ticket?.id) {
+      return;
+    }
+
+    setStatusSubmitting(true);
+
+    try {
+      await updateTicketStatus({
+        ticket_id: ticket.id,
+        status: "closed",
+        actor: currentOperator,
+        note: statusForm.note.trim() || "Ticket manuell abgeschlossen",
+      });
+
+      await refreshWithSuccess(
+        "Ticket geschlossen",
+        "Das Ticket wurde als abgeschlossen markiert."
+      );
+    } catch (error) {
+      emitToast({
+        type: "error",
+        title: "Schliessen fehlgeschlagen",
+        description: readErrorMessage(error),
+      });
+    } finally {
+      setStatusSubmitting(false);
+    }
+  }
+
+  async function handleEscalateTicket() {
+    if (!ticket?.id) {
+      return;
+    }
+
+    if (!reviewForm.reason.trim()) {
+      emitToast({
+        type: "error",
+        title: "Eskalation braucht einen Grund",
+        description: "Bitte hinterlege vor der Eskalation eine kurze Begründung im Prüfbereich.",
+      });
+      setActiveTab("review");
+      return;
+    }
+
+    setEscalating(true);
+
+    try {
+      await escalateTicket({
+        ticket_id: ticket.id,
+        escalated_by: currentOperator,
+        reason: reviewForm.reason.trim(),
+        target_team: assignmentForm.team.trim() || reviewForm.team.trim() || ticket.team || null,
+        assignee: assignmentForm.assignee.trim() || ticket.assignee || null,
+        priority: "critical",
+      });
+
+      await refreshWithSuccess(
+        "Ticket eskaliert",
+        "Priorität und SLA-Status wurden für die Eskalation angepasst."
+      );
+    } catch (error) {
+      emitToast({
+        type: "error",
+        title: "Eskalation fehlgeschlagen",
+        description: readErrorMessage(error),
+      });
+    } finally {
+      setEscalating(false);
+    }
+  }
+
+  async function handleCommentSubmit(payload) {
+    if (!ticket?.id) {
+      return false;
+    }
+
+    setCommentSubmitting(true);
+
+    try {
+      await addTicketComment({
+        ticket_id: ticket.id,
+        actor: payload.actor || currentOperator,
+        body: payload.body,
+        is_internal: payload.isInternal,
+      });
+
+      await refreshWithSuccess(
+        payload.isInternal ? "Interne Notiz gespeichert" : "Kommentar gespeichert",
+        "Der Verlauf wurde aktualisiert."
+      );
+      return true;
+    } catch (error) {
+      emitToast({
+        type: "error",
+        title: "Kommentar fehlgeschlagen",
+        description: readErrorMessage(error),
+      });
+      return false;
+    } finally {
+      setCommentSubmitting(false);
+    }
+  }
+
+  async function handleRefresh() {
+    await loadTicket({ silent: true });
     emitToast({
       type: "success",
       title: "Ticket aktualisiert",
       description: "Die neuesten Ticketdaten werden jetzt angezeigt.",
     });
-  };
+  }
 
-  const handleCopyId = async () => {
+  async function handleCopyId() {
     try {
       await navigator.clipboard.writeText(String(ticket?.id ?? ""));
       emitToast({
@@ -560,7 +671,7 @@ export default function TicketDetailPage() {
         description: "Der Zugriff auf die Zwischenablage ist in diesem Browser nicht verfügbar.",
       });
     }
-  };
+  }
 
   if (initialLoading) {
     return (
@@ -569,7 +680,7 @@ export default function TicketDetailPage() {
           <div className="detail-loading-spinner" />
           <div>
             <h2>Ticketdetails werden geladen</h2>
-            <p>Die neuesten Prüf-, Zuweisungs- und KI-Triage-Daten werden geladen.</p>
+            <p>Prüfung, Zuweisung, Kommentare und Audit-Trail werden vorbereitet.</p>
           </div>
         </div>
       </div>
@@ -631,6 +742,22 @@ export default function TicketDetailPage() {
             ID kopieren
           </button>
           <button
+            className="detail-action-button detail-action-button-danger"
+            type="button"
+            onClick={handleEscalateTicket}
+            disabled={escalating}
+          >
+            {escalating ? "Eskaliere..." : "Eskalieren"}
+          </button>
+          <button
+            className="detail-action-button detail-action-button-secondary"
+            type="button"
+            onClick={handleCloseTicket}
+            disabled={statusSubmitting || ticket.status === "closed"}
+          >
+            Schliessen
+          </button>
+          <button
             className="detail-action-button detail-action-button-primary"
             type="button"
             onClick={handleRefresh}
@@ -644,6 +771,12 @@ export default function TicketDetailPage() {
       {loadError ? (
         <MessageBanner variant="warning" title="Letzte erfolgreich geladene Ticketdaten werden verwendet">
           {loadError}
+        </MessageBanner>
+      ) : null}
+
+      {ticket.status === "closed" ? (
+        <MessageBanner variant="success" title="Ticket ist abgeschlossen">
+          Dieses Ticket wurde geschlossen. Kommentare und Verlauf bleiben weiterhin sichtbar.
         </MessageBanner>
       ) : null}
 
@@ -661,10 +794,9 @@ export default function TicketDetailPage() {
 
         <div className="ticket-detail-meta">
           {detailBadges.map((item) => (
-            <Badge key={item.label} variant={item.variant}>
-              {item.label}
-            </Badge>
+            <Badge key={`${item.type}-${item.value}`} value={item.value} type={item.type} />
           ))}
+          <SlaBadge dueAt={ticket.dueAt} breached={ticket.slaBreached} />
         </div>
       </section>
 
@@ -672,20 +804,18 @@ export default function TicketDetailPage() {
         <SectionCard title="Ticket-Metadaten">
           <div className="detail-stats-grid">
             <InfoStat label="Status" value={formatStatus(ticket.status)} />
-            <InfoStat
-              label="Supportbereich"
-              value={formatLabel(ticket.department, "Bank-IT Support")}
-            />
+            <InfoStat label="Supportbereich" value={formatLabel(ticket.department, "Bank-IT Support")} />
+            <InfoStat label="Team" value={formatLabel(ticket.team, "Noch offen")} />
             <InfoStat label="Kategorie" value={formatCategory(ticket.category)} />
             <InfoStat label="Priorität" value={formatPriority(ticket.priority)} />
             <InfoStat label="Trefferquote" value={formatConfidence(ticket.confidence)} />
             <InfoStat label="Zugewiesen an" value={formatLabel(ticket.assignee, "Noch nicht zugewiesen")} />
-            <InfoStat label="Erstellt" value={formatLabel(ticket.createdAt)} />
-            <InfoStat label="Aktualisiert" value={formatLabel(ticket.updatedAt)} />
-            <InfoStat
-              label="Prüfung"
-              value={formatReviewDecision(ticket.reviewDecision || "pending")}
-            />
+            <InfoStat label="Erstellt" value={formatLabel(ticket.createdAt ? formatDateTime(ticket.createdAt) : null)} />
+            <InfoStat label="Aktualisiert" value={formatLabel(ticket.updatedAt ? formatDateTime(ticket.updatedAt) : null)} />
+            <InfoStat label="Fällig am" value={formatLabel(ticket.dueAt ? formatDateTime(ticket.dueAt) : null, "Noch nicht definiert")} />
+            <InfoStat label="SLA" value={ticket.slaBreached ? "Verletzt" : "Im Rahmen"} />
+            <InfoStat label="Tags" value={formatTags(ticket.tags)} />
+            <InfoStat label="Reporter" value={formatLabel(ticket.reporter, "Nicht hinterlegt")} />
           </div>
         </SectionCard>
 
@@ -721,22 +851,14 @@ export default function TicketDetailPage() {
           {activeTab === "overview" ? (
             <div className="ticket-detail-grid">
               <SectionCard title="KI-Empfehlung">
-                {ticket.category || ticket.priority || ticket.confidence ? (
+                {ticket.predictedCategory || ticket.predictedPriority || ticket.confidence ? (
                   <div className="detail-stats-grid">
-                    <InfoStat label="Empfohlene Kategorie" value={formatCategory(ticket.category)} />
-                    <InfoStat label="Empfohlene Priorität" value={formatPriority(ticket.priority)} />
-                    <InfoStat
-                      label="Modell-Trefferquote"
-                      value={formatConfidence(ticket.confidence)}
-                    />
-                    <InfoStat
-                      label="Empfohlenes Team"
-                      value={formatLabel(ticket.suggestedTeam, "Unbekannt")}
-                    />
-                    <InfoStat
-                      label="Empfohlene Abteilung"
-                      value={formatLabel(ticket.analysis?.suggested_department, "Unbekannt")}
-                    />
+                    <InfoStat label="Empfohlene Kategorie" value={formatCategory(ticket.predictedCategory)} />
+                    <InfoStat label="Empfohlene Priorität" value={formatPriority(ticket.predictedPriority)} />
+                    <InfoStat label="Modell-Trefferquote" value={formatConfidence(ticket.confidence)} />
+                    <InfoStat label="Empfohlenes Team" value={formatLabel(ticket.suggestedTeam, "Unbekannt")} />
+                    <InfoStat label="Empfohlene Abteilung" value={formatLabel(ticket.suggestedDepartment, "Unbekannt")} />
+                    <InfoStat label="Nächster Schritt" value={formatLabel(ticket.nextStep, "Kein nächster Schritt vorhanden")} />
                   </div>
                 ) : (
                   <EmptyInline
@@ -746,101 +868,131 @@ export default function TicketDetailPage() {
                 )}
               </SectionCard>
 
-              <SectionCard title="Begründung">
-                {ticket.rationale || ticket.nextStep ? (
-                  <div className="detail-stats-grid">
-                    <InfoStat
-                      label="Begründung"
-                      value={formatLabel(ticket.rationale, "Keine Begründung vorhanden")}
+              <SectionCard title="Status & SLA">
+                <form className="detail-form" onSubmit={handleStatusSubmit}>
+                  <label className="detail-form-field">
+                    <span>Status</span>
+                    <select
+                      value={statusForm.status}
+                      onChange={(event) => setStatusForm({ ...statusForm, status: event.target.value })}
+                      disabled={statusSubmitting}
+                    >
+                      {STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="detail-form-field">
+                    <span>Operative Notiz</span>
+                    <textarea
+                      rows="4"
+                      placeholder="Statuswechsel kurz begründen oder Zusatzkontext erfassen..."
+                      value={statusForm.note}
+                      onChange={(event) => setStatusForm({ ...statusForm, note: event.target.value })}
+                      disabled={statusSubmitting}
                     />
-                    <InfoStat
-                      label="Nächster Schritt"
-                      value={formatLabel(ticket.nextStep, "Kein nächster Schritt vorhanden")}
-                    />
+                  </label>
+
+                  <div className="detail-status-panel">
+                    <div className="detail-status-panel-copy">
+                      <strong>SLA-Lage</strong>
+                      <SlaBadge dueAt={ticket.dueAt} breached={ticket.slaBreached} />
+                    </div>
+                    <button className="primary-button" type="submit" disabled={statusSubmitting}>
+                      {statusSubmitting ? "Aktualisiere Status..." : "Status speichern"}
+                    </button>
                   </div>
-                ) : (
-                  <EmptyInline
-                    title="Keine Begründung verfügbar"
-                    text="Die KI hat für diese Ticketempfehlung keine Begründung geliefert."
-                  />
-                )}
+                </form>
               </SectionCard>
 
-              <SectionCard title="Aktueller Entscheidungsstand">
-                {ticket.reviewDecision || ticket.reviewReason || ticket.assignee ? (
-                  <div className="detail-stats-grid">
-                    <InfoStat
-                      label="Prüfentscheid"
-                      value={formatReviewDecision(ticket.reviewDecision || "pending")}
-                    />
-                    <InfoStat
-                      label="Prüfnotizen"
-                      value={formatLabel(ticket.reviewReason, "Keine Prüfnotizen")}
-                    />
-                    <InfoStat
-                      label="Zugewiesen an"
-                      value={formatLabel(ticket.assignee, "Noch nicht zugewiesen")}
-                    />
-                  </div>
-                ) : (
-                  <EmptyInline
-                    title="Noch keine operativen Aktualisierungen"
-                    text="Dieses Ticket wurde noch nicht geprüft oder zugewiesen."
-                  />
-                )}
+              <SectionCard title="Kommentare & interne Notizen">
+                <CommentComposer
+                  onSubmit={handleCommentSubmit}
+                  submitting={commentSubmitting}
+                  defaultActor={currentOperator}
+                />
               </SectionCard>
 
               <SectionCard title="Verlauf & Audit-Trail">
-                {ticket.events.length ? (
-                  <div className="detail-events-list">
-                    {ticket.events.map((event) => (
-                      <EventItem key={event.id} event={event} />
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyInline
-                    title="Kein Verlauf verfügbar"
-                    text="Für dieses Ticket sind noch keine Audit-Ereignisse vorhanden."
-                  />
-                )}
+                <ActivityTimeline events={ticket.events} />
               </SectionCard>
             </div>
           ) : null}
 
           {activeTab === "review" ? (
-            <SectionCard title="Prüfentscheid">
+            <SectionCard title="Prüfentscheid & Priorisierung">
               <form className="detail-form" onSubmit={handleReviewSubmit}>
                 <label className="detail-form-field">
                   <span>Entscheid</span>
                   <select
-                    value={reviewDecision}
-                    onChange={(event) => setReviewDecision(event.target.value)}
+                    value={reviewForm.decision}
+                    onChange={(event) => setReviewForm({ ...reviewForm, decision: event.target.value })}
                     disabled={reviewSubmitting}
                   >
-                    <option value="accepted">Akzeptieren</option>
-                    <option value="rejected">Ablehnen</option>
+                    <option value="accepted">KI-Vorschlag akzeptieren</option>
+                    <option value="rejected">KI-Vorschlag anpassen</option>
                     <option value="needs_review">Weitere Prüfung nötig</option>
-                    <option value="escalated">Eskalieren</option>
+                    <option value="escalated">Mit Eskalation speichern</option>
                   </select>
                 </label>
 
                 <label className="detail-form-field">
-                  <span>Begründung / Notizen</span>
+                  <span>Kategorie</span>
+                  <select
+                    value={reviewForm.category}
+                    onChange={(event) => setReviewForm({ ...reviewForm, category: event.target.value })}
+                    disabled={reviewSubmitting}
+                  >
+                    {CATEGORY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="detail-form-field">
+                  <span>Priorität</span>
+                  <select
+                    value={reviewForm.priority}
+                    onChange={(event) => setReviewForm({ ...reviewForm, priority: event.target.value })}
+                    disabled={reviewSubmitting}
+                  >
+                    {PRIORITY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="detail-form-field">
+                  <span>Zielteam</span>
+                  <input
+                    type="text"
+                    value={reviewForm.team}
+                    onChange={(event) => setReviewForm({ ...reviewForm, team: event.target.value })}
+                    placeholder="z. B. payments-operations-team"
+                    disabled={reviewSubmitting}
+                  />
+                </label>
+
+                <label className="detail-form-field">
+                  <span>Begründung / Prüfnotiz</span>
                   <textarea
                     rows="5"
-                    placeholder="Prüfbegründung oder Korrekturhinweise ergänzen..."
-                    value={reviewReason}
-                    onChange={(event) => setReviewReason(event.target.value)}
+                    placeholder="Prüfbegründung, Korrektur oder Eskalationsgrund ergänzen..."
+                    value={reviewForm.reason}
+                    onChange={(event) => setReviewForm({ ...reviewForm, reason: event.target.value })}
                     disabled={reviewSubmitting}
                   />
                 </label>
 
                 <div className="detail-action-row">
-                  <button
-                    className="primary-button"
-                    type="submit"
-                    disabled={reviewSubmitting}
-                  >
+                  <button className="primary-button" type="submit" disabled={reviewSubmitting}>
                     {reviewSubmitting ? "Speichere Prüfung..." : "Prüfung speichern"}
                   </button>
                 </div>
@@ -849,29 +1001,15 @@ export default function TicketDetailPage() {
           ) : null}
 
           {activeTab === "assignment" ? (
-            <SectionCard title="Zuweisung">
-              <form className="detail-form" onSubmit={handleAssignmentSubmit}>
-                <label className="detail-form-field">
-                  <span>Zuständiges Team / Person</span>
-                  <input
-                    type="text"
-                    placeholder="z. B. it-support-team"
-                    value={assignmentValue}
-                    onChange={(event) => setAssignmentValue(event.target.value)}
-                    disabled={assignmentSubmitting}
-                  />
-                </label>
-
-                <div className="detail-action-row">
-                  <button
-                    className="primary-button"
-                    type="submit"
-                    disabled={assignmentSubmitting}
-                  >
-                    {assignmentSubmitting ? "Speichere Zuweisung..." : "Zuweisung speichern"}
-                  </button>
-                </div>
-              </form>
+            <SectionCard title="Neu zuweisen">
+              <AssigneePicker
+                team={assignmentForm.team}
+                assignee={assignmentForm.assignee}
+                note={assignmentForm.note}
+                submitting={assignmentSubmitting}
+                onChange={(key, value) => setAssignmentForm((current) => ({ ...current, [key]: value }))}
+                onSubmit={handleAssignmentSubmit}
+              />
             </SectionCard>
           ) : null}
         </div>

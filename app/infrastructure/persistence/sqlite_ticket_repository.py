@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -27,6 +28,13 @@ class SQLiteTicketRepository(TicketRepositoryPort):
             reporter=ticket.reporter,
             source=ticket.source,
             department=ticket.department,
+            category=ticket.category,
+            priority=ticket.priority,
+            team=ticket.team,
+            assignee=ticket.assignee,
+            due_at=self._normalize_datetime(ticket.due_at),
+            tags=self._serialize_tags(ticket.tags),
+            sla_breached=bool(ticket.sla_breached),
             status=ticket.status.value,
         )
         self.session.add(db_record)
@@ -56,6 +64,9 @@ class SQLiteTicketRepository(TicketRepositoryPort):
         db_record.rationale = analysis.rationale
         db_record.model_version = analysis.model_version
         db_record.analyzed_at = self._normalize_datetime(analysis.analyzed_at)
+        db_record.category = db_record.category or analysis.predicted_category.value
+        db_record.priority = db_record.priority or analysis.predicted_priority.value
+        db_record.team = db_record.team or analysis.suggested_team
         self.session.commit()
         self.session.refresh(db_record)
 
@@ -86,6 +97,9 @@ class SQLiteTicketRepository(TicketRepositoryPort):
         db_record.final_category = decision.final_category.value
         db_record.final_priority = decision.final_priority.value
         db_record.final_team = decision.final_team
+        db_record.category = decision.final_category.value
+        db_record.priority = decision.final_priority.value
+        db_record.team = decision.final_team
         db_record.accepted_ai_suggestion = decision.accepted_ai_suggestion
         db_record.review_comment = decision.review_comment
         db_record.reviewed_by = decision.reviewed_by
@@ -115,8 +129,10 @@ class SQLiteTicketRepository(TicketRepositoryPort):
     def attach_assignment(self, ticket_id: str, assignment: Assignment) -> TicketRecord:
         db_record = self._get_db_record(ticket_id)
         db_record.assigned_team = assignment.assigned_team
+        db_record.assignee = assignment.assignee
         db_record.assigned_by = assignment.assigned_by
         db_record.assignment_note = assignment.assignment_note
+        db_record.team = assignment.assigned_team
         self.session.commit()
         self.session.refresh(db_record)
 
@@ -128,6 +144,11 @@ class SQLiteTicketRepository(TicketRepositoryPort):
             details=(
                 f"Zugewiesenes Team={assignment.assigned_team}"
                 + (
+                    f", Bearbeitung={assignment.assignee}"
+                    if assignment.assignee
+                    else ""
+                )
+                + (
                     f", Notiz={assignment.assignment_note}"
                     if assignment.assignment_note
                     else ""
@@ -137,7 +158,13 @@ class SQLiteTicketRepository(TicketRepositoryPort):
 
         return self.get_ticket(ticket_id)
 
-    def update_status(self, ticket_id: str, status: TicketStatus) -> TicketRecord:
+    def update_status(
+        self,
+        ticket_id: str,
+        status: TicketStatus,
+        actor: str | None = None,
+        note: str | None = None,
+    ) -> TicketRecord:
         db_record = self._get_db_record(ticket_id)
         previous_status = db_record.status
         db_record.status = status.value
@@ -148,14 +175,42 @@ class SQLiteTicketRepository(TicketRepositoryPort):
             self.add_event(
                 ticket_id=ticket_id,
                 event_type="status_changed",
-                actor="system",
+                actor=actor or "system",
                 summary="Ticketstatus geändert",
                 details=(
                     f"{self._format_status(previous_status)} -> "
                     f"{self._format_status(status.value)}"
+                    + (f", Notiz={note}" if note else "")
                 ),
             )
 
+        return self.get_ticket(ticket_id)
+
+    def update_ticket_fields(
+        self,
+        ticket_id: str,
+        *,
+        priority: str | None = None,
+        team: str | None = None,
+        assignee: str | None = None,
+        due_at=None,
+        sla_breached: bool | None = None,
+    ) -> TicketRecord:
+        db_record = self._get_db_record(ticket_id)
+
+        if priority is not None:
+            db_record.priority = priority
+        if team is not None:
+            db_record.team = team
+        if assignee is not None:
+            db_record.assignee = assignee
+        if due_at is not None:
+            db_record.due_at = self._normalize_datetime(due_at)
+        if sla_breached is not None:
+            db_record.sla_breached = bool(sla_breached)
+
+        self.session.commit()
+        self.session.refresh(db_record)
         return self.get_ticket(ticket_id)
 
     def add_event(
@@ -239,6 +294,23 @@ class SQLiteTicketRepository(TicketRepositoryPort):
     def _format_boolean(self, value: bool) -> str:
         return "Ja" if value else "Nein"
 
+    def _serialize_tags(self, tags: list[str] | None) -> str | None:
+        cleaned_tags = [tag.strip() for tag in (tags or []) if str(tag).strip()]
+        if not cleaned_tags:
+            return None
+        return json.dumps(cleaned_tags)
+
+    def _deserialize_tags(self, value: str | None) -> list[str]:
+        if not value:
+            return []
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+        except json.JSONDecodeError:
+            pass
+        return [segment.strip() for segment in value.split(",") if segment.strip()]
+
     def _to_event(self, event: TicketEventModel) -> TicketEvent:
         return TicketEvent(
             id=event.id,
@@ -257,6 +329,13 @@ class SQLiteTicketRepository(TicketRepositoryPort):
             reporter=db_record.reporter,
             source=db_record.source,
             department=db_record.department,
+            category=db_record.category,
+            priority=db_record.priority,
+            team=db_record.team,
+            assignee=db_record.assignee,
+            due_at=db_record.due_at,
+            tags=self._deserialize_tags(db_record.tags),
+            sla_breached=bool(db_record.sla_breached),
             department_locked=False,
             status=TicketStatus(db_record.status),
             id=db_record.id,
@@ -293,6 +372,7 @@ class SQLiteTicketRepository(TicketRepositoryPort):
         if db_record.assigned_team:
             assignment = Assignment(
                 assigned_team=db_record.assigned_team,
+                assignee=db_record.assignee,
                 assigned_by=db_record.assigned_by,
                 assignment_note=db_record.assignment_note,
             )

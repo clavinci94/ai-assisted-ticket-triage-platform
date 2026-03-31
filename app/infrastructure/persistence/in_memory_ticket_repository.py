@@ -30,6 +30,9 @@ class InMemoryTicketRepository(TicketRepositoryPort):
     def attach_analysis(self, ticket_id: str, analysis: TriageAnalysis) -> TicketRecord:
         record = self._records[ticket_id]
         record.analysis = analysis
+        record.ticket.category = record.ticket.category or analysis.predicted_category.value
+        record.ticket.priority = record.ticket.priority or analysis.predicted_priority.value
+        record.ticket.team = record.ticket.team or analysis.suggested_team
         self.add_event(
             ticket_id=ticket_id,
             event_type="triage_completed",
@@ -52,6 +55,9 @@ class InMemoryTicketRepository(TicketRepositoryPort):
     def attach_decision(self, ticket_id: str, decision: TriageDecision) -> TicketRecord:
         record = self._records[ticket_id]
         record.decision = decision
+        record.ticket.category = decision.final_category.value
+        record.ticket.priority = decision.final_priority.value
+        record.ticket.team = decision.final_team
         self.add_event(
             ticket_id=ticket_id,
             event_type="review_saved",
@@ -69,16 +75,33 @@ class InMemoryTicketRepository(TicketRepositoryPort):
     def attach_assignment(self, ticket_id: str, assignment: Assignment) -> TicketRecord:
         record = self._records[ticket_id]
         record.assignment = assignment
+        record.ticket.team = assignment.assigned_team
+        record.ticket.assignee = assignment.assignee
         self.add_event(
             ticket_id=ticket_id,
             event_type="assignment_saved",
             actor=assignment.assigned_by,
             summary="Zuweisung gespeichert",
-            details=f"Zugewiesenes Team={assignment.assigned_team}",
+            details=", ".join(
+                filter(
+                    None,
+                    [
+                        f"Zugewiesenes Team={assignment.assigned_team}",
+                        f"Bearbeitung={assignment.assignee}" if assignment.assignee else None,
+                        f"Notiz={assignment.assignment_note}" if assignment.assignment_note else None,
+                    ],
+                )
+            ),
         )
         return record
 
-    def update_status(self, ticket_id: str, status: TicketStatus) -> TicketRecord:
+    def update_status(
+        self,
+        ticket_id: str,
+        status: TicketStatus,
+        actor: str | None = None,
+        note: str | None = None,
+    ) -> TicketRecord:
         record = self._records[ticket_id]
         previous_status = record.ticket.status.value
         record.ticket.status = status
@@ -86,13 +109,39 @@ class InMemoryTicketRepository(TicketRepositoryPort):
             self.add_event(
                 ticket_id=ticket_id,
                 event_type="status_changed",
-                actor="system",
+                actor=actor or "system",
                 summary="Ticketstatus geändert",
                 details=(
                     f"{self._format_status(previous_status)} -> "
                     f"{self._format_status(status.value)}"
+                    + (f", Notiz={note}" if note else "")
                 ),
             )
+        return record
+
+    def update_ticket_fields(
+        self,
+        ticket_id: str,
+        *,
+        priority: str | None = None,
+        team: str | None = None,
+        assignee: str | None = None,
+        due_at=None,
+        sla_breached: bool | None = None,
+    ) -> TicketRecord:
+        record = self._records[ticket_id]
+
+        if priority is not None:
+            record.ticket.priority = priority
+        if team is not None:
+            record.ticket.team = team
+        if assignee is not None:
+            record.ticket.assignee = assignee
+        if due_at is not None:
+            record.ticket.due_at = due_at
+        if sla_breached is not None:
+            record.ticket.sla_breached = bool(sla_breached)
+
         return record
 
     def add_event(

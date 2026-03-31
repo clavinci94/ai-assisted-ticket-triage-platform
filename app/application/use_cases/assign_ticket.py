@@ -10,5 +10,9 @@ class AssignTicketUseCase:
 
     def execute(self, ticket_id: str, assignment: Assignment) -> TicketRecord:
         self.repository.attach_assignment(ticket_id, assignment)
-        updated_record = self.repository.update_status(ticket_id, TicketStatus.ASSIGNED)
+        updated_record = self.repository.update_status(
+            ticket_id,
+            TicketStatus.ASSIGNED,
+            actor=assignment.assigned_by,
+        )
         return updated_record
