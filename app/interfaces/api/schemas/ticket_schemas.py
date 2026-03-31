@@ -2,12 +2,16 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.domain.constants.departments import DEFAULT_DEPARTMENT
+
 
 class TicketCreateRequest(BaseModel):
     title: str = Field(..., min_length=3, max_length=255)
     description: str = Field(..., min_length=5, max_length=5000)
     reporter: str | None = Field(default=None, max_length=100)
     source: str = Field(default="internal", min_length=2, max_length=50)
+    department: str = Field(default=DEFAULT_DEPARTMENT, min_length=2, max_length=100)
+    department_locked: bool = False
 
 
 class TriageAnalysisResponse(BaseModel):
@@ -17,6 +21,7 @@ class TriageAnalysisResponse(BaseModel):
     priority_confidence: float
     summary: str
     suggested_team: str
+    suggested_department: str
     next_step: str
     rationale: str
     model_version: str
@@ -82,6 +87,7 @@ class TicketRecordResponse(BaseModel):
     description: str
     reporter: str | None
     source: str
+    department: str
     status: str
     analysis: TriageAnalysisResponse | None = None
     decision: TriageDecisionResponse | None = None
@@ -124,6 +130,7 @@ class DashboardAnalyticsResponse(BaseModel):
     status_distribution: list[AnalyticsDistributionItem]
     category_distribution: list[AnalyticsDistributionItem]
     priority_distribution: list[AnalyticsDistributionItem]
+    department_distribution: list[AnalyticsDistributionItem]
     management_metrics: ManagementMetricsResponse
     review_funnel: list[AnalyticsDistributionItem]
     ai_acceptance: list[AnalyticsDistributionItem]

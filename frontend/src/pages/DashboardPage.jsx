@@ -1,46 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  BarChart,
-  Bar,
-  CartesianGrid,
-  Cell,
-  PieChart,
-  Pie,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import SectionCard from "../components/SectionCard";
 import TicketList from "../components/TicketList";
 import Badge from "../components/Badge";
 import { useToast } from "../components/ToastProvider";
 import { fetchDashboardAnalytics, fetchTickets, triageTicket } from "../lib/api";
+import { DEPARTMENTS, normalizeDepartment } from "../lib/departments";
 
-const initialTicketForm = {
-  title: "",
-  description: "",
-  reporter: "",
-  source: "internal",
-};
-
-const STATUS_COLORS = {
-  new: "#94a3b8",
-  triaged: "#3b82f6",
-  reviewed: "#f59e0b",
-  assigned: "#10b981",
-  unknown: "#cbd5e1",
-};
-
-const CATEGORY_COLORS = ["#3b82f6", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444", "#64748b"];
-const PRIORITY_COLORS = {
-  low: "#94a3b8",
-  medium: "#3b82f6",
-  high: "#f59e0b",
-  critical: "#ef4444",
-  unknown: "#cbd5e1",
-};
+const WORKSPACE_TABS = [
+  { id: "overview", label: "Übersicht" },
+  { id: "tickets", label: "Ticket-Warteschlange" },
+  { id: "operations", label: "Nächste Schritte" },
+];
 
 function StatCard({ label, value, accent, helper }) {
   return (
@@ -55,40 +26,11 @@ function StatCard({ label, value, accent, helper }) {
   );
 }
 
-function ChartCard({ title, subtitle, children }) {
-  return (
-    <div className="chart-card">
-      <div className="chart-card-header">
-        <div>
-          <span className="chart-card-eyebrow">Operational Insights</span>
-          <h3>{title}</h3>
-          <p>{subtitle}</p>
-        </div>
-      </div>
-      <div className="chart-card-body">{children}</div>
-    </div>
-  );
-}
-
-function EmptyChartState() {
-  return <p className="chart-empty">Noch keine Daten verfügbar.</p>;
-}
-
-function ManagementCard({ label, value, helper, accent = "neutral" }) {
-  return (
-    <div className={`management-card management-card-${accent}`}>
-      <span className="management-label">{label}</span>
-      <strong className="management-value">{value}</strong>
-      <span className="management-helper">{helper}</span>
-    </div>
-  );
-}
-
 function OperationalPanel({ title, subtitle, children }) {
   return (
     <div className="operational-panel">
       <div className="operational-panel-header">
-        <span className="operational-panel-eyebrow">Operational View</span>
+        <span className="operational-panel-eyebrow">Operative Sicht</span>
         <h3>{title}</h3>
         <p>{subtitle}</p>
       </div>
@@ -111,17 +53,76 @@ function DashboardLoadingState() {
   );
 }
 
-function DashboardEmptyState({ onCreateSample }) {
+function DashboardEmptyState({ onCreateSample, onGoToCreate, submittingTriage }) {
   return (
     <div className="dashboard-empty-state">
-      <span className="empty-state-eyebrow">Dashboard Empty State</span>
-      <h3>No tickets available yet</h3>
+      <span className="empty-state-eyebrow">Leerer Arbeitsbereich</span>
+      <h3>Noch keine Tickets vorhanden</h3>
       <p>
-        Create your first ticket to populate KPIs, analytics charts and operational panels.
+        Starte mit einem Beispiel oder springe direkt in die Erfassung. Danach füllen sich Übersicht,
+        Abteilungen und KPI-Bereiche automatisch.
       </p>
-      <button type="button" onClick={onCreateSample}>
-        Create a sample ticket
-      </button>
+      <div className="empty-state-actions">
+        <button type="button" onClick={onCreateSample} disabled={submittingTriage}>
+          {submittingTriage ? "Wird angelegt..." : "Beispielticket anlegen"}
+        </button>
+        <button type="button" className="secondary-button" onClick={onGoToCreate}>
+          Zur Ticket-Erfassung
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DashboardCommandButton({ label, helper, onClick, active = false, emphasis = "neutral" }) {
+  return (
+    <button
+      type="button"
+      className={`dashboard-command-button dashboard-command-button-${emphasis} ${active ? "active" : ""}`}
+      onClick={onClick}
+    >
+      <strong>{label}</strong>
+      <span>{helper}</span>
+    </button>
+  );
+}
+
+function DistributionCard({ eyebrow, title, items, accent, emptyMessage, maxItems = 5 }) {
+  const visibleItems = items.slice(0, maxItems);
+  const total = items.reduce((sum, item) => sum + item.value, 0);
+  const maxValue = visibleItems.reduce((currentMax, item) => Math.max(currentMax, item.value), 0);
+
+  return (
+    <div className="distribution-card">
+      <div className="distribution-card-header">
+        <span className="distribution-title">{eyebrow}</span>
+        <h3>{title}</h3>
+      </div>
+
+      {visibleItems.length ? (
+        <div className="distribution-list">
+          {visibleItems.map((item) => {
+            const share = total ? Math.round((item.value / total) * 100) : 0;
+            const width = maxValue ? Math.max(Math.round((item.value / maxValue) * 100), item.value > 0 ? 10 : 0) : 0;
+
+            return (
+              <div key={item.name} className="distribution-row">
+                <div className="distribution-row-top">
+                  <span className="distribution-label">{item.name}</span>
+                  <span className="distribution-meta">
+                    {item.value} Tickets · {share}%
+                  </span>
+                </div>
+                <div className="distribution-bar-track">
+                  <div className={`distribution-bar distribution-bar-${accent}`} style={{ width: `${width}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="distribution-empty">{emptyMessage}</p>
+      )}
     </div>
   );
 }
@@ -130,7 +131,7 @@ function normalizeLabel(value) {
   return String(value || "unknown").toLowerCase();
 }
 
-function buildDistributionFromAccessor(tickets, accessor, orderedLabels = []) {
+function buildDistributionFromAccessor(tickets, accessor, orderedLabels = [], includeEmptyLabels = false) {
   const counts = new Map();
 
   tickets.forEach((ticket) => {
@@ -143,15 +144,15 @@ function buildDistributionFromAccessor(tickets, accessor, orderedLabels = []) {
 
   orderedLabels.forEach((label) => {
     const key = normalizeLabel(label);
-    if (counts.has(key)) {
-      const value = counts.get(key);
+    const value = counts.get(key) || 0;
+    if (value > 0 || includeEmptyLabels) {
       orderedItems.push({
-        name: key,
+        name: label,
         value,
         percent: Math.round((value / total) * 100),
       });
-      counts.delete(key);
     }
+    counts.delete(key);
   });
 
   Array.from(counts.entries())
@@ -168,11 +169,15 @@ function buildDistributionFromAccessor(tickets, accessor, orderedLabels = []) {
 }
 
 function getTicketPriority(ticket) {
-  return ticket.final_priority || ticket.analysis?.predicted_priority || "unknown";
+  return ticket.final_priority || ticket.priority || ticket.analysis?.predicted_priority || "unknown";
 }
 
 function getTicketCategory(ticket) {
-  return ticket.final_category || ticket.analysis?.predicted_category || "unknown";
+  return ticket.final_category || ticket.category || ticket.analysis?.predicted_category || "unknown";
+}
+
+function getTicketId(ticket) {
+  return ticket.ticket_id || ticket.id;
 }
 
 export default function DashboardPage() {
@@ -181,13 +186,12 @@ export default function DashboardPage() {
 
   const [tickets, setTickets] = useState([]);
   const [analytics, setAnalytics] = useState(null);
-  const [ticketForm, setTicketForm] = useState(initialTicketForm);
-
   const [loadingTickets, setLoadingTickets] = useState(false);
   const [submittingTriage, setSubmittingTriage] = useState(false);
-
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [activeWorkspace, setActiveWorkspace] = useState("overview");
 
   async function loadAnalytics() {
     try {
@@ -196,8 +200,8 @@ export default function DashboardPage() {
     } catch (err) {
       showToast({
         type: "error",
-        title: "Analytics loading failed",
-        message: err?.response?.data?.detail || "Dashboard analytics could not be loaded.",
+        title: "Analysen konnten nicht geladen werden",
+        message: err?.response?.data?.detail || "Die Dashboard-Analysen konnten nicht geladen werden.",
       });
     }
   }
@@ -214,8 +218,8 @@ export default function DashboardPage() {
     } catch (err) {
       showToast({
         type: "error",
-        title: "Loading failed",
-        message: err?.response?.data?.detail || "Tickets could not be loaded.",
+        title: "Laden fehlgeschlagen",
+        message: err?.response?.data?.detail || "Die Tickets konnten nicht geladen werden.",
       });
     } finally {
       if (!silent) {
@@ -226,62 +230,37 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadTickets();
-    loadAnalytics();
   }, []);
 
   const dashboardStats = analytics?.stats || {
     total: tickets.length,
-    triaged: 0,
-    reviewed: 0,
-    assigned: 0,
+    triaged: tickets.filter((ticket) => ticket.status === "triaged").length,
+    reviewed: tickets.filter((ticket) => ticket.status === "reviewed").length,
+    assigned: tickets.filter((ticket) => ticket.status === "assigned").length,
   };
 
   const statusDistribution =
     analytics?.status_distribution ||
-    buildDistributionFromAccessor(
-      tickets,
-      (ticket) => ticket.status,
-      ["new", "triaged", "reviewed", "assigned"]
-    );
-
-  const categoryDistribution =
-    analytics?.category_distribution ||
-    buildDistributionFromAccessor(
-      tickets,
-      (ticket) => getTicketCategory(ticket),
-      ["bug", "feature", "support", "requirement", "question"]
-    );
+    buildDistributionFromAccessor(tickets, (ticket) => ticket.status, ["new", "triaged", "reviewed", "assigned"]);
 
   const priorityDistribution =
     analytics?.priority_distribution ||
-    buildDistributionFromAccessor(
-      tickets,
-      (ticket) => getTicketPriority(ticket),
-      ["low", "medium", "high", "critical"]
-    );
+    buildDistributionFromAccessor(tickets, (ticket) => getTicketPriority(ticket), ["low", "medium", "high", "critical"]);
+
+  const departmentDistribution =
+    analytics?.department_distribution ||
+    buildDistributionFromAccessor(tickets, (ticket) => normalizeDepartment(ticket.department), DEPARTMENTS, true);
 
   const managementMetrics = analytics?.management_metrics || {
-    reviewed_count: 0,
+    reviewed_count: dashboardStats.reviewed,
     accepted_ai_count: 0,
     acceptance_rate: 0,
     assignment_rate: 0,
     review_coverage: 0,
   };
 
-  const reviewFunnelData =
-    analytics?.review_funnel?.map((item) => ({
-      ...item,
-      fill:
-        item.name === "created"
-          ? "#64748b"
-          : item.name === "triaged"
-            ? "#3b82f6"
-            : item.name === "reviewed"
-              ? "#f59e0b"
-              : "#10b981",
-    })) || [];
-
-  const aiAcceptanceData = analytics?.ai_acceptance || [];
+  const needsAttentionTickets = analytics?.needs_attention || [];
+  const recentTickets = analytics?.recent_activity || [...tickets].reverse().slice(0, 5);
 
   const filteredTickets = useMemo(() => {
     return tickets.filter((ticket) => {
@@ -293,50 +272,23 @@ export default function DashboardPage() {
         (ticket.reporter || "").toLowerCase().includes(normalizedSearch);
 
       const matchesStatus = statusFilter === "all" ? true : ticket.status === statusFilter;
+      const matchesDepartment =
+        departmentFilter === "all" ? true : normalizeDepartment(ticket.department) === departmentFilter;
 
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesStatus && matchesDepartment;
     });
-  }, [tickets, search, statusFilter]);
+  }, [tickets, search, statusFilter, departmentFilter]);
 
-  const recentTickets = analytics?.recent_activity || [...tickets].reverse().slice(0, 5);
-
-  const needsAttentionTickets = analytics?.needs_attention || [];
-
-  async function handleTriageSubmit(e) {
-    e.preventDefault();
-
-    try {
-      setSubmittingTriage(true);
-
-      const result = await triageTicket(ticketForm);
-      await loadTickets({ silent: true });
-      setTicketForm(initialTicketForm);
-
-      showToast({
-        type: "success",
-        title: "Ticket created",
-        message: "The ticket was successfully triaged and added to the dashboard.",
-      });
-
-      navigate(`/tickets/${result.ticket_id}`);
-    } catch (err) {
-      showToast({
-        type: "error",
-        title: "Triage failed",
-        message: err?.response?.data?.detail || "The ticket could not be created.",
-      });
-    } finally {
-      setSubmittingTriage(false);
-    }
-  }
+  const activeDepartments = departmentDistribution.filter((item) => item.value > 0);
+  const highlightedDepartments = activeDepartments.slice(0, 5);
 
   async function handleCreateSampleTicket() {
     try {
       setSubmittingTriage(true);
 
       const result = await triageTicket({
-        title: "Sample production login incident",
-        description: "Users intermittently fail authentication after the latest deployment.",
+        title: "Beispiel: Login-Störung in Produktion",
+        description: "Benutzerinnen und Benutzer können sich seit dem letzten Deployment teilweise nicht mehr anmelden.",
         reporter: "System Demo",
         source: "internal",
       });
@@ -345,16 +297,16 @@ export default function DashboardPage() {
 
       showToast({
         type: "success",
-        title: "Sample ticket created",
-        message: "A sample ticket was added to populate the dashboard.",
+        title: "Beispielticket erstellt",
+        message: "Ein Beispielticket wurde erstellt und dem Dashboard hinzugefügt.",
       });
 
       navigate(`/tickets/${result.ticket_id}`);
     } catch (err) {
       showToast({
         type: "error",
-        title: "Sample creation failed",
-        message: err?.response?.data?.detail || "The sample ticket could not be created.",
+        title: "Erstellung fehlgeschlagen",
+        message: err?.response?.data?.detail || "Das Beispielticket konnte nicht erstellt werden.",
       });
     } finally {
       setSubmittingTriage(false);
@@ -373,413 +325,341 @@ export default function DashboardPage() {
     <div className="app-shell dashboard-shell">
       <header className="dashboard-hero">
         <div className="dashboard-hero-copy">
-          <p className="eyebrow">Capstone Project</p>
-          <h1>AI-assisted Requirements & Ticket Triage Platform</h1>
+          <p className="eyebrow">Ticket-Triage-Plattform</p>
+          <h1>Ein Dashboard, klare Wege, keine Doppelungen</h1>
           <p className="subtitle">
-            AI assistiert, Business Rules kontrollieren, der Mensch validiert.
+            Die Übersicht ist deine Arbeitszentrale. Alle wichtigen Bereiche liegen oben als Schnellzugriffe,
+            während die Startseite nur noch Orientierung und Bedienhilfe liefert.
           </p>
+          <div className="hero-guide">
+            <p>
+              Wechsle hier direkt zwischen Überblick, Warteschlange und operativer Sicht oder springe gezielt in
+              Erfassung, KPIs und Abteilungen. So bleibt der tägliche Arbeitsfluss kompakt und nachvollziehbar.
+            </p>
+          </div>
         </div>
 
         <div className="hero-summary-card">
-          <span className="hero-summary-label">Platform Snapshot</span>
-          <strong className="hero-summary-value">{dashboardStats.total}</strong>
-          <span className="hero-summary-text">Total tickets currently tracked</span>
+          <span className="hero-summary-label">Heute im Fokus</span>
+          <strong className="hero-summary-value">{needsAttentionTickets.length}</strong>
+          <span className="hero-summary-text">Tickets mit unmittelbarem Handlungsbedarf</span>
         </div>
       </header>
 
+      <section className="dashboard-pathbar">
+        <div className="dashboard-breadcrumbs">
+          <span>Arbeitszentrale</span>
+          <span>•</span>
+          <span>{WORKSPACE_TABS.find((tab) => tab.id === activeWorkspace)?.label || "Übersicht"}</span>
+        </div>
+        <p className="dashboard-context-copy">
+          Die Startseite erklärt den Aufbau, hier steuerst du die tägliche Arbeit und springst in vertiefte Bereiche.
+        </p>
+      </section>
+
+      <section className="dashboard-command-bar" aria-label="Schnellzugriffe">
+        <div className="dashboard-command-section">
+          <div className="dashboard-command-heading">
+            <span>Arbeitsbereiche</span>
+            <p>Wechsle zwischen Überblick, Warteschlange und Handlungsbedarf.</p>
+          </div>
+          <div className="dashboard-command-grid">
+            <DashboardCommandButton
+              label="Übersicht"
+              helper="Kennzahlen und Verteilungen"
+              active={activeWorkspace === "overview"}
+              emphasis="primary"
+              onClick={() => setActiveWorkspace("overview")}
+            />
+            <DashboardCommandButton
+              label="Warteschlange"
+              helper="Filtern, suchen und öffnen"
+              active={activeWorkspace === "tickets"}
+              emphasis="primary"
+              onClick={() => setActiveWorkspace("tickets")}
+            />
+            <DashboardCommandButton
+              label="Nächste Schritte"
+              helper="Dringende Fälle priorisieren"
+              active={activeWorkspace === "operations"}
+              emphasis="primary"
+              onClick={() => setActiveWorkspace("operations")}
+            />
+          </div>
+        </div>
+
+        <div className="dashboard-command-section">
+          <div className="dashboard-command-heading">
+            <span>Sprungmarken</span>
+            <p>Öffne bei Bedarf direkt Erfassung, KPIs oder Abteilungen.</p>
+          </div>
+          <div className="dashboard-command-grid">
+            <DashboardCommandButton
+              label="Ticket erfassen"
+              helper="Neuen Fall anlegen"
+              emphasis="secondary"
+              onClick={() => navigate("/dashboard/create")}
+            />
+            <DashboardCommandButton
+              label="KPIs"
+              helper="Reporting und Trends"
+              emphasis="secondary"
+              onClick={() => navigate("/dashboard/kpis")}
+            />
+            <DashboardCommandButton
+              label="Abteilungen"
+              helper="Verteilung und Ownership"
+              emphasis="secondary"
+              onClick={() => navigate("/dashboard/departments")}
+            />
+          </div>
+        </div>
+      </section>
+
       {tickets.length === 0 ? (
-        <DashboardEmptyState onCreateSample={handleCreateSampleTicket} />
+        <DashboardEmptyState
+          onCreateSample={handleCreateSampleTicket}
+          onGoToCreate={() => navigate("/dashboard/create")}
+          submittingTriage={submittingTriage}
+        />
       ) : (
         <>
-          <section className="stats-grid" aria-label="Dashboard KPIs">
-            <StatCard
-              label="Total Tickets"
-              value={dashboardStats.total}
-              helper="Overall workload"
-              accent="neutral"
-            />
-            <StatCard
-              label="Triaged"
-              value={dashboardStats.triaged}
-              helper="AI-processed queue"
-              accent="info"
-            />
-            <StatCard
-              label="Reviewed"
-              value={dashboardStats.reviewed}
-              helper="Human-validated"
-              accent="warning"
-            />
-            <StatCard
-              label="Assigned"
-              value={dashboardStats.assigned}
-              helper="Ready for execution"
-              accent="success"
-            />
+          <section className="stats-grid" aria-label="Dashboard-KPIs">
+            <StatCard label="Gesamt" value={dashboardStats.total} helper="Gesamte Arbeitslast" accent="neutral" />
+            <StatCard label="Triagiert" value={dashboardStats.triaged} helper="Von KI vorqualifiziert" accent="info" />
+            <StatCard label="Geprüft" value={dashboardStats.reviewed} helper="Manuell geprüft" accent="warning" />
+            <StatCard label="Zugewiesen" value={dashboardStats.assigned} helper="Mit Teamzuweisung" accent="success" />
           </section>
 
-          <section className="management-grid" aria-label="Management Summary">
-            <ManagementCard
-              label="AI Acceptance Rate"
-              value={`${managementMetrics.acceptance_rate}%`}
-              helper={`${managementMetrics.accepted_ai_count} accepted of ${managementMetrics.reviewed_count} reviewed`}
-              accent="info"
-            />
-            <ManagementCard
-              label="Review Coverage"
-              value={`${managementMetrics.review_coverage}%`}
-              helper="Tickets reviewed or assigned"
-              accent="warning"
-            />
-            <ManagementCard
-              label="Assignment Rate"
-              value={`${managementMetrics.assignment_rate}%`}
-              helper="Tickets with explicit team ownership"
-              accent="success"
-            />
-          </section>
-
-          <section className="insight-strip">
-            <div className="insight-card">
-              <span className="insight-label">Workflow Status</span>
-              <strong>
-                {dashboardStats.assigned} assigned / {dashboardStats.total} total
-              </strong>
-              <p>Shows how much of the ticket flow already reached explicit team ownership.</p>
-            </div>
-
-            <div className="insight-card">
-              <span className="insight-label">Review Pipeline</span>
-              <strong>
-                {dashboardStats.reviewed + dashboardStats.assigned} reviewed or beyond
-              </strong>
-              <p>Indicates how many tickets already passed manual validation.</p>
-            </div>
-
-            <div className="insight-card">
-              <span className="insight-label">Queue Visibility</span>
-              <strong>{filteredTickets.length} visible in current filter</strong>
-              <p>Reflects search and status filtering in the list view.</p>
-            </div>
-          </section>
-
-          <section className="charts-grid" aria-label="Analytics Charts">
-            <ChartCard
-              title="Status Distribution"
-              subtitle="Current operational state across the ticket workflow."
-            >
-              {statusDistribution.length ? (
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={statusDistribution} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                    <CartesianGrid vertical={false} stroke="#e5e7eb" />
-                    <XAxis dataKey="name" tickLine={false} axisLine={false} />
-                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
-                    <Tooltip />
-                    <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                      {statusDistribution.map((entry) => (
-                        <Cell key={entry.name} fill={STATUS_COLORS[entry.name] || STATUS_COLORS.unknown} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <EmptyChartState />
-              )}
-            </ChartCard>
-
-            <ChartCard
-              title="Category Mix"
-              subtitle="Observed ticket categories based on final or predicted labels."
-            >
-              {categoryDistribution.length ? (
-                <ResponsiveContainer width="100%" height={280}>
-                  <PieChart>
-                    <Pie
-                      data={categoryDistribution}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={58}
-                      outerRadius={92}
-                      paddingAngle={3}
-                    >
-                      {categoryDistribution.map((entry, index) => (
-                        <Cell
-                          key={entry.name}
-                          fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <EmptyChartState />
-              )}
-              <div className="chart-legend">
-                {categoryDistribution.map((entry, index) => (
-                  <div key={entry.name} className="chart-legend-item">
-                    <span
-                      className="chart-legend-dot"
-                      style={{ backgroundColor: CATEGORY_COLORS[index % CATEGORY_COLORS.length] }}
-                    />
-                    <span className="chart-legend-label">{entry.name}</span>
-                    <span className="chart-legend-value">{entry.value}</span>
-                  </div>
-                ))}
+          <section className="workspace-shell">
+            <div className="workspace-header">
+              <div>
+                <p className="workspace-eyebrow">Arbeitsbereiche</p>
+                <h2>
+                  {activeWorkspace === "overview"
+                    ? "Management-Übersicht"
+                    : activeWorkspace === "tickets"
+                      ? "Ticket-Warteschlange"
+                      : "Operative Bearbeitung"}
+                </h2>
+                <p>
+                  {activeWorkspace === "overview"
+                    ? "Die wichtigsten Kennzahlen und Verteilungen auf einen Blick."
+                    : activeWorkspace === "tickets"
+                      ? "Suche, filtere und springe direkt in den passenden Vorgang."
+                      : "Konzentriere dich auf Tickets mit hohem Handlungsdruck und aktuelle Aktivitäten."}
+                </p>
               </div>
-            </ChartCard>
-
-            <ChartCard
-              title="Priority Levels"
-              subtitle="Current priority distribution across the ticket inventory."
-            >
-              {priorityDistribution.length ? (
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart
-                    data={priorityDistribution}
-                    layout="vertical"
-                    margin={{ top: 8, right: 8, left: 8, bottom: 0 }}
-                  >
-                    <CartesianGrid horizontal={false} stroke="#e5e7eb" />
-                    <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      tickLine={false}
-                      axisLine={false}
-                      width={70}
-                    />
-                    <Tooltip />
-                    <Bar dataKey="value" radius={[0, 8, 8, 0]}>
-                      {priorityDistribution.map((entry) => (
-                        <Cell
-                          key={entry.name}
-                          fill={PRIORITY_COLORS[entry.name] || PRIORITY_COLORS.unknown}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <EmptyChartState />
-              )}
-            </ChartCard>
-          </section>
-
-          <section className="charts-grid management-charts-grid" aria-label="Management Analytics">
-            <ChartCard
-              title="Review Funnel"
-              subtitle="Progression from created tickets through triage, review and assignment."
-            >
-              {reviewFunnelData.some((item) => item.value > 0) ? (
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={reviewFunnelData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                    <CartesianGrid vertical={false} stroke="#e5e7eb" />
-                    <XAxis dataKey="name" tickLine={false} axisLine={false} />
-                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
-                    <Tooltip />
-                    <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                      {reviewFunnelData.map((entry) => (
-                        <Cell key={entry.name} fill={entry.fill} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <EmptyChartState />
-              )}
-            </ChartCard>
-
-            <ChartCard
-              title="AI Acceptance"
-              subtitle="How often human reviewers accepted the AI recommendation."
-            >
-              {aiAcceptanceData.some((item) => item.value > 0) ? (
-                <ResponsiveContainer width="100%" height={280}>
-                  <PieChart>
-                    <Pie
-                      data={aiAcceptanceData}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={58}
-                      outerRadius={92}
-                      paddingAngle={3}
-                    >
-                      <Cell fill="#10b981" />
-                      <Cell fill="#f59e0b" />
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <EmptyChartState />
-              )}
-              <div className="chart-legend">
-                {aiAcceptanceData.map((entry, index) => (
-                  <div key={entry.name} className="chart-legend-item">
-                    <span
-                      className="chart-legend-dot"
-                      style={{ backgroundColor: index === 0 ? "#10b981" : "#f59e0b" }}
-                    />
-                    <span className="chart-legend-label">{entry.name}</span>
-                    <span className="chart-legend-value">{entry.value}</span>
-                  </div>
-                ))}
+              <div className="workspace-header-note">
+                <strong>Aktiver Bereich</strong>
+                <span>{WORKSPACE_TABS.find((tab) => tab.id === activeWorkspace)?.label || "Übersicht"}</span>
               </div>
-            </ChartCard>
-          </section>
+            </div>
 
-          <section className="operations-grid" aria-label="Operational Panels">
-            <OperationalPanel
-              title="Needs Attention"
-              subtitle="High-priority or still triaged tickets that likely need the next action soon."
-            >
-              {needsAttentionTickets.length ? (
-                <div className="ops-list">
-                  {needsAttentionTickets.map((ticket) => (
-                    <button
-                      key={ticket.ticket_id}
-                      className="ops-list-item"
-                      onClick={() => navigate(`/tickets/${ticket.ticket_id}`)}
-                    >
-                      <div className="ops-list-top">
-                        <strong>{ticket.title}</strong>
-                        <Badge value={getTicketPriority(ticket)} type="priority" />
-                      </div>
-                      <div className="ops-list-meta">
-                        <Badge value={ticket.status} type="status" />
-                        <Badge value={getTicketCategory(ticket)} type="category" />
-                      </div>
-                      <p>{ticket.description || "No description available."}</p>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="ops-empty">No urgent tickets currently flagged.</p>
-              )}
-            </OperationalPanel>
+            {activeWorkspace === "overview" ? (
+              <>
+                <section className="insight-strip">
+                  <div className="insight-card">
+                    <span className="insight-label">Warteschlange sichtbar</span>
+                    <strong>{filteredTickets.length} Tickets</strong>
+                    <p>So viele Tickets passen aktuell zu deinen Filtern in der Warteschlange.</p>
+                  </div>
+                  <div className="insight-card">
+                    <span className="insight-label">Prüfabdeckung</span>
+                    <strong>{managementMetrics.review_coverage}%</strong>
+                    <p>Tickets, die bereits geprüft oder zugewiesen sind.</p>
+                  </div>
+                  <div className="insight-card">
+                    <span className="insight-label">KI-Akzeptanz</span>
+                    <strong>{managementMetrics.acceptance_rate}%</strong>
+                    <p>Akzeptierte KI-Empfehlungen bezogen auf alle Prüfungen.</p>
+                  </div>
+                </section>
 
-            <OperationalPanel
-              title="Recent Activity"
-              subtitle="Most recently created or loaded tickets for fast follow-up navigation."
-            >
-              {recentTickets.length ? (
-                <div className="ops-list">
-                  {recentTickets.map((ticket) => (
-                    <button
-                      key={ticket.ticket_id}
-                      className="ops-list-item"
-                      onClick={() => navigate(`/tickets/${ticket.ticket_id}`)}
-                    >
-                      <div className="ops-list-top">
-                        <strong>{ticket.title}</strong>
-                        <Badge value={ticket.status} type="status" />
-                      </div>
-                      <div className="ops-list-meta">
-                        <span>Reporter: {ticket.reporter || "—"}</span>
-                        <span>Source: {ticket.source || "—"}</span>
-                      </div>
-                      <p>{ticket.description || "No description available."}</p>
+                <section className="analytics-grid" aria-label="Verdichtete Verteilungen">
+                  <DistributionCard
+                    eyebrow="Ablauf"
+                    title="Statusverteilung"
+                    items={statusDistribution.filter((item) => item.value > 0)}
+                    accent="info"
+                    emptyMessage="Noch keine Statusdaten verfügbar."
+                  />
+                  <DistributionCard
+                    eyebrow="Risiko"
+                    title="Prioritäten"
+                    items={priorityDistribution.filter((item) => item.value > 0)}
+                    accent="warning"
+                    emptyMessage="Noch keine Prioritätsdaten verfügbar."
+                  />
+                  <DistributionCard
+                    eyebrow="Verantwortung"
+                    title="Aktive Abteilungen"
+                    items={highlightedDepartments}
+                    accent="success"
+                    emptyMessage="Noch keine Abteilungen mit Tickets vorhanden."
+                  />
+                </section>
+
+                <section className="management-grid" aria-label="Management Summary">
+                  <div className="management-card management-card-info">
+                    <span className="management-label">Tickets in Prüfung</span>
+                    <strong className="management-value">{managementMetrics.reviewed_count}</strong>
+                    <span className="management-helper">Bereits manuell geprüfte Tickets</span>
+                  </div>
+                  <div className="management-card management-card-warning">
+                    <span className="management-label">Abteilungen aktiv</span>
+                    <strong className="management-value">{activeDepartments.length}</strong>
+                    <span className="management-helper">Bereiche mit mindestens einem Ticket</span>
+                  </div>
+                  <div className="management-card management-card-success">
+                    <span className="management-label">KI übernommen</span>
+                    <strong className="management-value">{managementMetrics.accepted_ai_count}</strong>
+                    <span className="management-helper">Prüfentscheide mit bestätigter Empfehlung</span>
+                  </div>
+                </section>
+              </>
+            ) : null}
+
+            {activeWorkspace === "tickets" ? (
+              <section className="workspace-grid" aria-label="Bereich Ticket-Warteschlange">
+                <SectionCard title="Filter & Suche">
+                  <div className="filter-stack">
+                    <label>
+                      Suchbegriff
+                      <input
+                        className="toolbar-input"
+                        placeholder="Titel, Beschreibung oder Reporter durchsuchen"
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Status
+                      <select
+                        className="toolbar-select"
+                        value={statusFilter}
+                        onChange={(event) => setStatusFilter(event.target.value)}
+                      >
+                        <option value="all">Alle Status</option>
+                        <option value="new">Neu</option>
+                        <option value="triaged">Triagiert</option>
+                        <option value="reviewed">Geprüft</option>
+                        <option value="assigned">Zugewiesen</option>
+                      </select>
+                    </label>
+                    <label>
+                      Abteilung
+                      <select
+                        className="toolbar-select"
+                        value={departmentFilter}
+                        onChange={(event) => setDepartmentFilter(event.target.value)}
+                      >
+                        <option value="all">Alle Abteilungen</option>
+                        {DEPARTMENTS.map((department) => (
+                          <option key={department} value={department}>
+                            {department}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <p className="filter-hint">
+                      Die Warteschlange zeigt nur noch passende Tickets. Für neue Fälle oder vertiefte Analysen
+                      wechselst du direkt über die Modul-Buttons.
+                    </p>
+                  </div>
+                </SectionCard>
+
+                <SectionCard
+                  title={`Ticket-Warteschlange (${filteredTickets.length})`}
+                  actions={(
+                    <button type="button" className="secondary-button" onClick={() => navigate("/dashboard/create")}>
+                      Neues Ticket
                     </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="ops-empty">No recent tickets available yet.</p>
-              )}
-            </OperationalPanel>
+                  )}
+                >
+                  {loadingTickets && tickets.length > 0 ? (
+                    <div className="inline-loading-state shimmer">Ticketdaten werden aktualisiert…</div>
+                  ) : null}
+
+                  {!loadingTickets && filteredTickets.length === 0 ? (
+                    <div className="list-empty-state">
+                      <strong>Keine Tickets passend zu den aktuellen Filtern</strong>
+                      <p>Reduziere die Filter oder wechsle in die KPI- beziehungsweise Abteilungsansicht.</p>
+                    </div>
+                  ) : (
+                    <TicketList tickets={filteredTickets} loading={loadingTickets && tickets.length === 0} selectedTicketId={null} />
+                  )}
+                </SectionCard>
+              </section>
+            ) : null}
+
+            {activeWorkspace === "operations" ? (
+              <section className="operations-grid" aria-label="Operational Panels">
+                <OperationalPanel
+                  title="Handlungsbedarf"
+                  subtitle="Tickets mit hoher Priorität oder noch offenem Triage-Status."
+                >
+                  {needsAttentionTickets.length ? (
+                    <div className="ops-list">
+                      {needsAttentionTickets.map((ticket) => (
+                        <button
+                          key={getTicketId(ticket)}
+                          type="button"
+                          className="ops-list-item"
+                          onClick={() => navigate(`/tickets/${getTicketId(ticket)}`)}
+                        >
+                          <div className="ops-list-top">
+                            <strong>{ticket.title}</strong>
+                            <Badge value={getTicketPriority(ticket)} type="priority" />
+                          </div>
+                          <div className="ops-list-meta">
+                            <Badge value={ticket.status} type="status" />
+                            <Badge value={getTicketCategory(ticket)} type="category" />
+                          </div>
+                          <p>{ticket.description || "Keine Beschreibung verfügbar."}</p>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="ops-empty">Aktuell sind keine dringenden Tickets markiert.</p>
+                  )}
+                </OperationalPanel>
+
+                <OperationalPanel
+                  title="Letzte Aktivitäten"
+                  subtitle="Zuletzt angelegte oder geladene Tickets für schnelles Nachfassen."
+                >
+                  {recentTickets.length ? (
+                    <div className="ops-list">
+                      {recentTickets.map((ticket) => (
+                        <button
+                          key={getTicketId(ticket)}
+                          type="button"
+                          className="ops-list-item"
+                          onClick={() => navigate(`/tickets/${getTicketId(ticket)}`)}
+                        >
+                          <div className="ops-list-top">
+                            <strong>{ticket.title}</strong>
+                            <Badge value={ticket.status} type="status" />
+                          </div>
+                          <div className="ops-list-meta">
+                            <span>Reporter: {ticket.reporter || "—"}</span>
+                            <span>Abteilung: {ticket.department || "—"}</span>
+                          </div>
+                          <p>{ticket.description || "Keine Beschreibung verfügbar."}</p>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="ops-empty">Noch keine Aktivitäten verfügbar.</p>
+                  )}
+                </OperationalPanel>
+              </section>
+            ) : null}
           </section>
         </>
       )}
 
-      <main className="layout dashboard-layout">
-        <div className="left-column">
-          <SectionCard title="Create & Triage Ticket">
-            <form className="form" onSubmit={handleTriageSubmit}>
-              <label>
-                Title
-                <input
-                  value={ticketForm.title}
-                  onChange={(e) => setTicketForm({ ...ticketForm, title: e.target.value })}
-                  required
-                />
-              </label>
-
-              <label>
-                Description
-                <textarea
-                  rows="5"
-                  value={ticketForm.description}
-                  onChange={(e) =>
-                    setTicketForm({ ...ticketForm, description: e.target.value })
-                  }
-                  required
-                />
-              </label>
-
-              <label>
-                Reporter
-                <input
-                  value={ticketForm.reporter}
-                  onChange={(e) => setTicketForm({ ...ticketForm, reporter: e.target.value })}
-                />
-              </label>
-
-              <label>
-                Source
-                <input
-                  value={ticketForm.source}
-                  onChange={(e) => setTicketForm({ ...ticketForm, source: e.target.value })}
-                />
-              </label>
-
-              <button type="submit" disabled={submittingTriage}>
-                {submittingTriage ? "Submitting..." : "Create & Triage"}
-              </button>
-            </form>
-          </SectionCard>
-        </div>
-
-        <div className="right-column">
-          <SectionCard title="Tickets">
-            <div className="toolbar toolbar-elevated">
-              <input
-                className="toolbar-input"
-                placeholder="Search tickets..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              <select
-                className="toolbar-select"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="all">All statuses</option>
-                <option value="new">new</option>
-                <option value="triaged">triaged</option>
-                <option value="reviewed">reviewed</option>
-                <option value="assigned">assigned</option>
-              </select>
-            </div>
-
-            {loadingTickets && tickets.length > 0 ? (
-              <div className="inline-loading-state shimmer">Refreshing ticket data…</div>
-            ) : null}
-
-            {!loadingTickets && filteredTickets.length === 0 ? (
-              <div className="list-empty-state">
-                <strong>No tickets match the current filter</strong>
-                <p>Adjust search or status filter to show matching records.</p>
-              </div>
-            ) : (
-              <TicketList
-                tickets={filteredTickets}
-                loading={loadingTickets && tickets.length === 0}
-                selectedTicketId={null}
-              />
-            )}
-          </SectionCard>
-        </div>
-      </main>
     </div>
   );
 }

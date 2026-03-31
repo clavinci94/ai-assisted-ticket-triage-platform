@@ -22,8 +22,8 @@ class InMemoryTicketRepository(TicketRepositoryPort):
             ticket_id=ticket.id,
             event_type="ticket_created",
             actor=ticket.reporter,
-            summary="Ticket created",
-            details=f"Source: {ticket.source}",
+            summary="Ticket erstellt",
+            details=f"Quelle: {ticket.source}",
         )
         return record
 
@@ -34,13 +34,19 @@ class InMemoryTicketRepository(TicketRepositoryPort):
             ticket_id=ticket_id,
             event_type="triage_completed",
             actor="ai-system",
-            summary="AI triage completed",
+            summary="KI-Triage abgeschlossen",
             details=(
-                f"Category={analysis.predicted_category.value}, "
-                f"Priority={analysis.predicted_priority.value}, "
-                f"Suggested team={analysis.suggested_team}"
+                f"Kategorie={self._format_category(analysis.predicted_category.value)}, "
+                f"Priorität={self._format_priority(analysis.predicted_priority.value)}, "
+                f"Empfohlene Abteilung={analysis.suggested_department}, "
+                f"Empfohlenes Team={analysis.suggested_team}"
             ),
         )
+        return record
+
+    def update_department(self, ticket_id: str, department: str) -> TicketRecord:
+        record = self._records[ticket_id]
+        record.ticket.department = department
         return record
 
     def attach_decision(self, ticket_id: str, decision: TriageDecision) -> TicketRecord:
@@ -50,12 +56,12 @@ class InMemoryTicketRepository(TicketRepositoryPort):
             ticket_id=ticket_id,
             event_type="review_saved",
             actor=decision.reviewed_by,
-            summary="Review decision saved",
+            summary="Prüfentscheid gespeichert",
             details=(
-                f"Final category={decision.final_category.value}, "
-                f"Final priority={decision.final_priority.value}, "
-                f"Final team={decision.final_team}, "
-                f"Accepted AI={decision.accepted_ai_suggestion}"
+                f"Endgültige Kategorie={self._format_category(decision.final_category.value)}, "
+                f"Endgültige Priorität={self._format_priority(decision.final_priority.value)}, "
+                f"Endgültiges Team={decision.final_team}, "
+                f"KI akzeptiert={self._format_boolean(decision.accepted_ai_suggestion)}"
             ),
         )
         return record
@@ -67,8 +73,8 @@ class InMemoryTicketRepository(TicketRepositoryPort):
             ticket_id=ticket_id,
             event_type="assignment_saved",
             actor=assignment.assigned_by,
-            summary="Assignment saved",
-            details=f"Assigned team={assignment.assigned_team}",
+            summary="Zuweisung gespeichert",
+            details=f"Zugewiesenes Team={assignment.assigned_team}",
         )
         return record
 
@@ -81,8 +87,11 @@ class InMemoryTicketRepository(TicketRepositoryPort):
                 ticket_id=ticket_id,
                 event_type="status_changed",
                 actor="system",
-                summary="Ticket status changed",
-                details=f"{previous_status} -> {status.value}",
+                summary="Ticketstatus geändert",
+                details=(
+                    f"{self._format_status(previous_status)} -> "
+                    f"{self._format_status(status.value)}"
+                ),
             )
         return record
 
@@ -112,3 +121,33 @@ class InMemoryTicketRepository(TicketRepositoryPort):
 
     def list_tickets(self) -> list[TicketRecord]:
         return list(self._records.values())
+
+    def _format_category(self, value: str) -> str:
+        return {
+            "bug": "Fehler",
+            "feature": "Funktion",
+            "support": "Support",
+            "requirement": "Anforderung",
+            "question": "Frage",
+            "unknown": "Unklar",
+        }.get((value or "").lower(), value)
+
+    def _format_priority(self, value: str) -> str:
+        return {
+            "low": "Niedrig",
+            "medium": "Mittel",
+            "high": "Hoch",
+            "critical": "Kritisch",
+        }.get((value or "").lower(), value)
+
+    def _format_status(self, value: str) -> str:
+        return {
+            "open": "Offen",
+            "triaged": "Triage abgeschlossen",
+            "reviewed": "Geprüft",
+            "assigned": "Zugewiesen",
+            "closed": "Geschlossen",
+        }.get((value or "").lower(), value)
+
+    def _format_boolean(self, value: bool) -> str:
+        return "Ja" if value else "Nein"

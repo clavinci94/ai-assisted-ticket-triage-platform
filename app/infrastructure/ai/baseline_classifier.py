@@ -1,5 +1,7 @@
 from datetime import datetime
+
 from app.application.ports.classifier_port import ClassifierPort
+from app.domain.constants.departments import infer_department_from_text
 from app.domain.entities.ticket import Ticket
 from app.domain.entities.triage_analysis import TriageAnalysis
 from app.domain.enums.ticket_category import TicketCategory
@@ -9,33 +11,34 @@ from app.domain.enums.ticket_priority import TicketPriority
 class BaselineClassifier(ClassifierPort):
     def analyze(self, ticket: Ticket) -> TriageAnalysis:
         text = f"{ticket.title} {ticket.description}".lower()
+        department = infer_department_from_text(text, fallback=ticket.department)
 
         category = TicketCategory.REQUIREMENT
         priority = TicketPriority.MEDIUM
-        suggested_team = "product-team"
-        next_step = "Review the requirement and clarify acceptance criteria."
-        rationale = "Baseline heuristic based on title and description keywords."
+        suggested_team = "it-support-team"
+        next_step = "Anforderung prüfen und Akzeptanzkriterien klären."
+        rationale = "Baseline-Heuristik auf Basis von Stichwörtern in Titel und Beschreibung."
 
         if any(word in text for word in ["error", "crash", "bug", "fails", "failure"]):
             category = TicketCategory.BUG
             priority = TicketPriority.HIGH
-            suggested_team = "engineering-team"
-            next_step = "Reproduce the issue and collect logs."
-            rationale = "Detected bug-related keywords."
+            suggested_team = "it-support-team"
+            next_step = "Problem reproduzieren und Logs sammeln."
+            rationale = "Fehlerbezogene Stichwörter wurden erkannt."
         elif any(word in text for word in ["help", "support", "how to", "question"]):
             category = TicketCategory.SUPPORT
             priority = TicketPriority.MEDIUM
-            suggested_team = "support-team"
-            next_step = "Request missing context and guide the user."
-            rationale = "Detected support-related keywords."
+            suggested_team = "it-support-team"
+            next_step = "Fehlenden Kontext einholen und die meldende Person begleiten."
+            rationale = "Supportbezogene Stichwörter wurden erkannt."
         elif any(word in text for word in ["feature", "add", "enhancement", "improve"]):
             category = TicketCategory.FEATURE
             priority = TicketPriority.MEDIUM
-            suggested_team = "product-team"
-            next_step = "Review product fit and estimate business value."
-            rationale = "Detected feature-related keywords."
+            suggested_team = "it-support-team"
+            next_step = "Fachlichen Nutzen prüfen und Business Value einschätzen."
+            rationale = "Featurebezogene Stichwörter wurden erkannt."
 
-        summary = f"Triage analysis for ticket: {ticket.title}"
+        summary = f"Triage-Analyse für Ticket: {ticket.title}"
 
         return TriageAnalysis(
             predicted_category=category,
@@ -44,6 +47,9 @@ class BaselineClassifier(ClassifierPort):
             priority_confidence=0.65,
             summary=summary,
             suggested_team=suggested_team,
+            suggested_department=department,
             next_step=next_step,
             rationale=rationale,
+            model_version="baseline-v1",
+            analyzed_at=datetime.utcnow(),
         )

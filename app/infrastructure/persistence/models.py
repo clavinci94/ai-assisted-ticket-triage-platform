@@ -12,6 +12,7 @@ class TicketRecordModel(Base):
     description = Column(Text, nullable=False)
     reporter = Column(String(100), nullable=True)
     source = Column(String(50), nullable=False)
+    department = Column(String(100), nullable=False, default="Bank-IT Support")
     status = Column(String(50), nullable=False)
 
     predicted_category = Column(String(50), nullable=True)
@@ -20,6 +21,7 @@ class TicketRecordModel(Base):
     priority_confidence = Column(Float, nullable=True)
     summary = Column(Text, nullable=True)
     suggested_team = Column(String(100), nullable=True)
+    suggested_department = Column(String(100), nullable=True)
     next_step = Column(Text, nullable=True)
     rationale = Column(Text, nullable=True)
     model_version = Column(String(100), nullable=True)

@@ -25,11 +25,15 @@ class TriageTicketUseCase:
 
         analysis = replace(
             analysis,
+            suggested_department=analysis.suggested_department or ticket.department,
             model_version=analysis.model_version or "tfidf-mnb-v1",
             analyzed_at=analysis.analyzed_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         )
 
+        if not ticket.department_locked:
+            ticket.department = analysis.suggested_department
         self.repository.attach_analysis(ticket.id, analysis)
+        self.repository.update_department(ticket.id, ticket.department)
         self.repository.update_status(ticket.id, TicketStatus.TRIAGED)
 
         final_priority = apply_priority_rules(ticket, analysis.predicted_priority)

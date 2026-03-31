@@ -49,6 +49,7 @@ def test_dashboard_analytics_returns_expected_structure():
     assert "status_distribution" in body
     assert "category_distribution" in body
     assert "priority_distribution" in body
+    assert "department_distribution" in body
     assert "management_metrics" in body
     assert "review_funnel" in body
     assert "ai_acceptance" in body
@@ -59,6 +60,7 @@ def test_dashboard_analytics_returns_expected_structure():
     assert isinstance(body["status_distribution"], list)
     assert isinstance(body["category_distribution"], list)
     assert isinstance(body["priority_distribution"], list)
+    assert isinstance(body["department_distribution"], list)
     assert isinstance(body["review_funnel"], list)
     assert isinstance(body["ai_acceptance"], list)
     assert isinstance(body["needs_attention"], list)

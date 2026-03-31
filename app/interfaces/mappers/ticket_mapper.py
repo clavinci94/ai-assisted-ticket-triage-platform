@@ -8,4 +8,6 @@ def to_domain_ticket(request: TicketCreateRequest) -> Ticket:
         description=request.description,
         reporter=request.reporter,
         source=request.source,
+        department=request.department,
+        department_locked=request.department_locked,
     )

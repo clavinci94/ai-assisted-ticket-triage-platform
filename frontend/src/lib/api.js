@@ -17,7 +17,12 @@ export async function fetchTicket(ticketId) {
 }
 
 export async function triageTicket(payload) {
-  const response = await api.post("/tickets/triage", payload);
+  const response = await api.post("/tickets/triage/llm", payload);
+  return response.data;
+}
+
+export async function previewTriageTicket(payload) {
+  const response = await api.post("/tickets/triage/llm/preview", payload);
   return response.data;
 }
 

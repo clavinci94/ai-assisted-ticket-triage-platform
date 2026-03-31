@@ -18,6 +18,7 @@ venv/
 
 # Env files
 .env
+litellm_config.yaml
 
 # Test / coverage
 .pytest_cache/

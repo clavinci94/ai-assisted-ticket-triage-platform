@@ -13,6 +13,7 @@ class TriageAnalysis:
     priority_confidence: float
     summary: str
     suggested_team: str
+    suggested_department: str
     next_step: str
     rationale: str
     model_version: str

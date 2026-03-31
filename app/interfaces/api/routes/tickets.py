@@ -38,6 +38,7 @@ def _to_analysis_response(analysis) -> TriageAnalysisResponse:
         priority_confidence=analysis.priority_confidence,
         summary=analysis.summary,
         suggested_team=analysis.suggested_team,
+        suggested_department=analysis.suggested_department,
         next_step=analysis.next_step,
         rationale=analysis.rationale,
         model_version=analysis.model_version,
@@ -89,6 +90,7 @@ def _to_ticket_record_response(record) -> TicketRecordResponse:
         description=record.ticket.description,
         reporter=record.ticket.reporter,
         source=record.ticket.source,
+        department=record.ticket.department,
         status=record.ticket.status.value,
         analysis=analysis,
         decision=decision,
@@ -130,6 +132,50 @@ def triage_ticket(
         final_team=result.final_team,
         ai_recommendation_used=result.ai_recommendation_used,
     )
+
+
+@router.post("/triage/llm", response_model=TriageResponse)
+def triage_ticket_with_llm(
+    request: TicketCreateRequest,
+    repository: TicketRepositoryDep,
+) -> TriageResponse:
+    ticket = to_domain_ticket(request)
+
+    try:
+        from app.infrastructure.ai.litellm_classifier import LitellmClassifier
+
+        use_case = TriageTicketUseCase(
+            classifier=LitellmClassifier(),
+            repository=repository,
+        )
+        result = use_case.execute(ticket)
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error))
+
+    return TriageResponse(
+        ticket_id=result.ticket_id,
+        analysis=_to_analysis_response(result.analysis),
+        final_priority=result.final_priority.value,
+        final_category=result.final_category.value,
+        final_team=result.final_team,
+        ai_recommendation_used=result.ai_recommendation_used,
+    )
+
+
+@router.post("/triage/llm/preview", response_model=TriageAnalysisResponse)
+def preview_ticket_with_llm(
+    request: TicketCreateRequest,
+) -> TriageAnalysisResponse:
+    ticket = to_domain_ticket(request)
+
+    try:
+        from app.infrastructure.ai.litellm_classifier import LitellmClassifier
+
+        analysis = LitellmClassifier().analyze(ticket)
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error))
+
+    return _to_analysis_response(analysis)
 
 
 @router.post("/decision", response_model=TriageDecisionResponse)
@@ -194,6 +240,7 @@ def get_dashboard_analytics(
         status_distribution=result.status_distribution,
         category_distribution=result.category_distribution,
         priority_distribution=result.priority_distribution,
+        department_distribution=result.department_distribution,
         management_metrics=result.management_metrics,
         review_funnel=result.review_funnel,
         ai_acceptance=result.ai_acceptance,

@@ -26,6 +26,7 @@ class SQLiteTicketRepository(TicketRepositoryPort):
             description=ticket.description,
             reporter=ticket.reporter,
             source=ticket.source,
+            department=ticket.department,
             status=ticket.status.value,
         )
         self.session.add(db_record)
@@ -36,8 +37,8 @@ class SQLiteTicketRepository(TicketRepositoryPort):
             ticket_id=ticket.id,
             event_type="ticket_created",
             actor=ticket.reporter,
-            summary="Ticket created",
-            details=f"Source: {ticket.source}",
+            summary="Ticket erstellt",
+            details=f"Quelle: {ticket.source}",
         )
 
         return self.get_ticket(ticket.id)
@@ -50,6 +51,7 @@ class SQLiteTicketRepository(TicketRepositoryPort):
         db_record.priority_confidence = analysis.priority_confidence
         db_record.summary = analysis.summary
         db_record.suggested_team = analysis.suggested_team
+        db_record.suggested_department = analysis.suggested_department
         db_record.next_step = analysis.next_step
         db_record.rationale = analysis.rationale
         db_record.model_version = analysis.model_version
@@ -61,14 +63,22 @@ class SQLiteTicketRepository(TicketRepositoryPort):
             ticket_id=ticket_id,
             event_type="triage_completed",
             actor="ai-system",
-            summary="AI triage completed",
+            summary="KI-Triage abgeschlossen",
             details=(
-                f"Category={analysis.predicted_category.value}, "
-                f"Priority={analysis.predicted_priority.value}, "
-                f"Suggested team={analysis.suggested_team}"
+                f"Kategorie={self._format_category(analysis.predicted_category.value)}, "
+                f"Priorität={self._format_priority(analysis.predicted_priority.value)}, "
+                f"Empfohlene Abteilung={analysis.suggested_department}, "
+                f"Empfohlenes Team={analysis.suggested_team}"
             ),
         )
 
+        return self.get_ticket(ticket_id)
+
+    def update_department(self, ticket_id: str, department: str) -> TicketRecord:
+        db_record = self._get_db_record(ticket_id)
+        db_record.department = department
+        self.session.commit()
+        self.session.refresh(db_record)
         return self.get_ticket(ticket_id)
 
     def attach_decision(self, ticket_id: str, decision: TriageDecision) -> TicketRecord:
@@ -86,14 +96,14 @@ class SQLiteTicketRepository(TicketRepositoryPort):
             ticket_id=ticket_id,
             event_type="review_saved",
             actor=decision.reviewed_by,
-            summary="Review decision saved",
+            summary="Prüfentscheid gespeichert",
             details=(
-                f"Final category={decision.final_category.value}, "
-                f"Final priority={decision.final_priority.value}, "
-                f"Final team={decision.final_team}, "
-                f"Accepted AI={decision.accepted_ai_suggestion}"
+                f"Endgültige Kategorie={self._format_category(decision.final_category.value)}, "
+                f"Endgültige Priorität={self._format_priority(decision.final_priority.value)}, "
+                f"Endgültiges Team={decision.final_team}, "
+                f"KI akzeptiert={self._format_boolean(decision.accepted_ai_suggestion)}"
                 + (
-                    f", Comment={decision.review_comment}"
+                    f", Kommentar={decision.review_comment}"
                     if decision.review_comment
                     else ""
                 )
@@ -114,11 +124,11 @@ class SQLiteTicketRepository(TicketRepositoryPort):
             ticket_id=ticket_id,
             event_type="assignment_saved",
             actor=assignment.assigned_by,
-            summary="Assignment saved",
+            summary="Zuweisung gespeichert",
             details=(
-                f"Assigned team={assignment.assigned_team}"
+                f"Zugewiesenes Team={assignment.assigned_team}"
                 + (
-                    f", Note={assignment.assignment_note}"
+                    f", Notiz={assignment.assignment_note}"
                     if assignment.assignment_note
                     else ""
                 )
@@ -139,8 +149,11 @@ class SQLiteTicketRepository(TicketRepositoryPort):
                 ticket_id=ticket_id,
                 event_type="status_changed",
                 actor="system",
-                summary="Ticket status changed",
-                details=f"{previous_status} -> {status.value}",
+                summary="Ticketstatus geändert",
+                details=(
+                    f"{self._format_status(previous_status)} -> "
+                    f"{self._format_status(status.value)}"
+                ),
             )
 
         return self.get_ticket(ticket_id)
@@ -196,6 +209,36 @@ class SQLiteTicketRepository(TicketRepositoryPort):
                 return datetime.utcnow()
         return datetime.utcnow()
 
+    def _format_category(self, value: str) -> str:
+        return {
+            "bug": "Fehler",
+            "feature": "Funktion",
+            "support": "Support",
+            "requirement": "Anforderung",
+            "question": "Frage",
+            "unknown": "Unklar",
+        }.get((value or "").lower(), value)
+
+    def _format_priority(self, value: str) -> str:
+        return {
+            "low": "Niedrig",
+            "medium": "Mittel",
+            "high": "Hoch",
+            "critical": "Kritisch",
+        }.get((value or "").lower(), value)
+
+    def _format_status(self, value: str) -> str:
+        return {
+            "open": "Offen",
+            "triaged": "Triage abgeschlossen",
+            "reviewed": "Geprüft",
+            "assigned": "Zugewiesen",
+            "closed": "Geschlossen",
+        }.get((value or "").lower(), value)
+
+    def _format_boolean(self, value: bool) -> str:
+        return "Ja" if value else "Nein"
+
     def _to_event(self, event: TicketEventModel) -> TicketEvent:
         return TicketEvent(
             id=event.id,
@@ -213,6 +256,8 @@ class SQLiteTicketRepository(TicketRepositoryPort):
             description=db_record.description,
             reporter=db_record.reporter,
             source=db_record.source,
+            department=db_record.department,
+            department_locked=False,
             status=TicketStatus(db_record.status),
             id=db_record.id,
         )
@@ -226,6 +271,7 @@ class SQLiteTicketRepository(TicketRepositoryPort):
                 priority_confidence=db_record.priority_confidence or 0.0,
                 summary=db_record.summary or "",
                 suggested_team=db_record.suggested_team or "",
+                suggested_department=db_record.suggested_department or db_record.department,
                 next_step=db_record.next_step or "",
                 rationale=db_record.rationale or "",
                 model_version=db_record.model_version or "unknown",

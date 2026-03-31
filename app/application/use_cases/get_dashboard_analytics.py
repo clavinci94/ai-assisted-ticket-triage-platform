@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.application.dto.ticket_record import TicketRecord
+from app.domain.constants.departments import KNOWN_DEPARTMENTS, canonicalize_department_label
 
 
 @dataclass
@@ -11,6 +12,7 @@ class DashboardAnalyticsResult:
     status_distribution: list[dict[str, int | str]]
     category_distribution: list[dict[str, int | str]]
     priority_distribution: list[dict[str, int | str]]
+    department_distribution: list[dict[str, int | str]]
     management_metrics: dict[str, int]
     review_funnel: list[dict[str, int | str]]
     ai_acceptance: list[dict[str, int | str]]
@@ -84,6 +86,12 @@ class GetDashboardAnalyticsUseCase:
                 "priority",
                 ["low", "medium", "high", "critical"],
             ),
+            department_distribution=self._distribution(
+                tickets,
+                "department",
+                KNOWN_DEPARTMENTS,
+                include_empty_labels=True,
+            ),
             management_metrics={
                 "reviewed_count": len(reviewed_tickets),
                 "accepted_ai_count": accepted_ai_count,
@@ -139,6 +147,7 @@ class GetDashboardAnalyticsUseCase:
             "status": ticket.status.value,
             "category": category,
             "priority": priority,
+            "department": canonicalize_department_label(ticket.department),
             "accepted_ai_suggestion": bool(getattr(decision, "accepted_ai_suggestion", False)) if decision else False,
             "reviewed": decision is not None,
             "assigned": assignment is not None,
@@ -149,14 +158,16 @@ class GetDashboardAnalyticsUseCase:
         items: list[dict[str, Any]],
         key: str,
         ordered_labels: list[str],
+        include_empty_labels: bool = False,
     ) -> list[dict[str, int | str]]:
         counts = Counter((item.get(key) or "unknown").lower() for item in items)
         result: list[dict[str, int | str]] = []
 
         for label in ordered_labels:
-            if counts.get(label):
-                result.append({"name": label, "value": counts[label]})
-                counts.pop(label, None)
+            normalized_label = label.lower()
+            value = counts.pop(normalized_label, 0)
+            if value or include_empty_labels:
+                result.append({"name": label, "value": value})
 
         for name, value in sorted(counts.items(), key=lambda x: (-x[1], x[0])):
             result.append({"name": name, "value": value})

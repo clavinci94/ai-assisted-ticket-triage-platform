@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from app.application.ports.classifier_port import ClassifierPort
+from app.domain.constants.departments import infer_department_from_text
 from app.domain.entities.ticket import Ticket
 from app.domain.entities.triage_analysis import TriageAnalysis
 from app.domain.enums.ticket_category import TicketCategory
@@ -15,7 +16,7 @@ class MLClassifier(ClassifierPort):
 
     def analyze(self, ticket: Ticket) -> TriageAnalysis:
         if self.model is None:
-            raise RuntimeError("ML model not found. Train the model first.")
+            raise RuntimeError("ML-Modell nicht gefunden. Bitte trainiere das Modell zuerst.")
 
         text = f"{ticket.title} {ticket.description}"
         probabilities = self.model.predict_proba([text])[0]
@@ -24,10 +25,11 @@ class MLClassifier(ClassifierPort):
 
         category = self._map_label_to_category(label)
         priority = self._infer_priority(ticket, category)
+        department = infer_department_from_text(text, fallback=ticket.department)
         suggested_team = self._infer_team(category)
         next_step = self._infer_next_step(category)
-        rationale = f"ML classification using TF-IDF + MultinomialNB. Predicted label: {label}"
-        summary = f"Triage analysis for ticket: {ticket.title}"
+        rationale = f"ML-Klassifikation mit TF-IDF + MultinomialNB. Vorhergesagtes Label: {label}"
+        summary = f"Triage-Analyse für Ticket: {ticket.title}"
 
         return TriageAnalysis(
             predicted_category=category,
@@ -36,6 +38,7 @@ class MLClassifier(ClassifierPort):
             priority_confidence=confidence,
             summary=summary,
             suggested_team=suggested_team,
+            suggested_department=department,
             next_step=next_step,
             rationale=rationale,
             model_version=self.model_version,
@@ -74,19 +77,14 @@ class MLClassifier(ClassifierPort):
         return TicketPriority.MEDIUM
 
     def _infer_team(self, category: TicketCategory) -> str:
-        if category == TicketCategory.BUG:
-            return "engineering-team"
-        if category in {TicketCategory.FEATURE, TicketCategory.REQUIREMENT}:
-            return "product-team"
-        if category in {TicketCategory.SUPPORT, TicketCategory.QUESTION}:
-            return "support-team"
-        return "triage-team"
+        # In this banking IT support environment, all tickets are routed to the IT support area.
+        return "it-support-team"
 
     def _infer_next_step(self, category: TicketCategory) -> str:
         if category == TicketCategory.BUG:
-            return "Reproduce the issue and collect logs."
+            return "Problem reproduzieren und Logs sammeln."
         if category in {TicketCategory.FEATURE, TicketCategory.REQUIREMENT}:
-            return "Review business value and clarify acceptance criteria."
+            return "Fachlichen Nutzen prüfen und Akzeptanzkriterien klären."
         if category in {TicketCategory.SUPPORT, TicketCategory.QUESTION}:
-            return "Request missing context and guide the reporter."
-        return "Review ticket manually."
+            return "Fehlenden Kontext einholen und die meldende Person begleiten."
+        return "Ticket manuell prüfen."

@@ -7,9 +7,9 @@ import SectionCard from "../components/SectionCard";
 import { api } from "../lib/api";
 
 const TABS = [
-  { key: "overview", label: "Overview" },
-  { key: "review", label: "Review" },
-  { key: "assignment", label: "Assignment" },
+  { key: "overview", label: "Übersicht" },
+  { key: "review", label: "Prüfung" },
+  { key: "assignment", label: "Zuweisung" },
 ];
 
 function readErrorMessage(error) {
@@ -17,7 +17,7 @@ function readErrorMessage(error) {
     error?.response?.data?.detail ||
     error?.response?.data?.message ||
     error?.message ||
-    "An unexpected error occurred."
+    "Ein unerwarteter Fehler ist aufgetreten."
   );
 }
 
@@ -41,13 +41,13 @@ function formatConfidence(value) {
   return `${Math.round(numeric)}%`;
 }
 
-function formatLabel(value, fallback = "Not available") {
+function formatLabel(value, fallback = "Nicht verfügbar") {
   return pickFirst(value) ?? fallback;
 }
 
 function formatDateTime(value) {
   if (!value) {
-    return "Unknown time";
+    return "Unbekannte Zeit";
   }
 
   const date = new Date(value);
@@ -64,7 +64,7 @@ function normalizeEvent(event, index) {
       id: `event-${index}`,
       eventType: "unknown",
       actor: null,
-      summary: "Unknown event",
+      summary: "Unbekanntes Ereignis",
       details: null,
       createdAt: null,
     };
@@ -74,10 +74,77 @@ function normalizeEvent(event, index) {
     id: pickFirst(event.id, `event-${index}`),
     eventType: pickFirst(event.event_type, event.eventType, "unknown"),
     actor: pickFirst(event.actor),
-    summary: pickFirst(event.summary, "Event recorded"),
+    summary: pickFirst(event.summary, "Ereignis erfasst"),
     details: pickFirst(event.details),
     createdAt: pickFirst(event.created_at, event.createdAt),
   };
+}
+
+function formatCategory(value) {
+  const normalized = String(value || "").toLowerCase();
+  return (
+    {
+      bug: "Fehler",
+      feature: "Funktion",
+      support: "Support",
+      requirement: "Anforderung",
+      question: "Frage",
+      unknown: "Unbekannt",
+    }[normalized] || formatLabel(value)
+  );
+}
+
+function formatPriority(value) {
+  const normalized = String(value || "").toLowerCase();
+  return (
+    {
+      low: "Niedrig",
+      medium: "Mittel",
+      high: "Hoch",
+      critical: "Kritisch",
+      unknown: "Unbekannt",
+    }[normalized] || formatLabel(value)
+  );
+}
+
+function formatStatus(value) {
+  const normalized = String(value || "").toLowerCase();
+  return (
+    {
+      new: "Neu",
+      triaged: "Triagiert",
+      reviewed: "Geprüft",
+      assigned: "Zugewiesen",
+      open: "Offen",
+    }[normalized] || formatLabel(value)
+  );
+}
+
+function formatReviewDecision(value) {
+  const normalized = String(value || "").toLowerCase();
+  return (
+    {
+      accepted: "Akzeptiert",
+      rejected: "Abgelehnt",
+      needs_review: "Weitere Prüfung nötig",
+      escalated: "Eskaliert",
+      pending: "Ausstehend",
+    }[normalized] || formatLabel(value)
+  );
+}
+
+function formatEventType(value) {
+  const normalized = String(value || "").toLowerCase();
+  return (
+    {
+      ticket_created: "Ticket erstellt",
+      triage_completed: "Triage abgeschlossen",
+      review_saved: "Prüfentscheid gespeichert",
+      assignment_saved: "Zuweisung gespeichert",
+      status_changed: "Status geändert",
+      unknown: "Unbekannt",
+    }[normalized] || formatLabel(value)
+  );
 }
 
 function normalizeTicket(ticket) {
@@ -93,6 +160,13 @@ function normalizeTicket(ticket) {
     ticket.decision?.final_category,
     ticket.analysis?.predicted_category,
     ticket.ai_prediction?.category
+  );
+  const department = pickFirst(
+    ticket.department,
+    ticket.analysis?.suggested_department,
+    ticket.department_name,
+    ticket.area,
+    "Bank-IT Support"
   );
 
   const finalPriority = pickFirst(
@@ -135,6 +209,25 @@ function normalizeTicket(ticket) {
     ticket.content
   );
 
+  const rationale = pickFirst(
+    ticket.rationale,
+    ticket.analysis?.rationale,
+    ticket.analysis?.explanation,
+    ticket.ai_rationale
+  );
+
+  const nextStep = pickFirst(
+    ticket.next_step,
+    ticket.analysis?.next_step,
+    ticket.ai_next_step
+  );
+
+  const suggestedTeam = pickFirst(
+    ticket.suggested_team,
+    ticket.analysis?.suggested_team,
+    ticket.ai_team
+  );
+
   const title = pickFirst(
     ticket.title,
     ticket.subject,
@@ -164,8 +257,7 @@ function normalizeTicket(ticket) {
   const reviewDecision = pickFirst(
     ticket.review_decision,
     ticket.final_decision,
-    ticket.decision?.final_category ? `${ticket.decision.final_category} / ${ticket.decision.final_priority}` : null,
-    ticket.decision
+    ticket.decision?.final_category ? `${ticket.decision.final_category} / ${ticket.decision.final_priority}` : null
   );
 
   const reviewReason = pickFirst(
@@ -187,6 +279,10 @@ function normalizeTicket(ticket) {
     summary,
     category: finalCategory,
     priority: finalPriority,
+    department,
+    rationale,
+    nextStep,
+    suggestedTeam,
     assignee,
     confidence,
     status,
@@ -226,8 +322,8 @@ function EventItem({ event }) {
           <span>{formatDateTime(event.createdAt)}</span>
         </div>
         <div className="detail-event-meta">
-          <span className="detail-event-type">{event.eventType}</span>
-          <span>{event.actor ? `Actor: ${event.actor}` : "Actor: system"}</span>
+          <span className="detail-event-type">{formatEventType(event.eventType)}</span>
+          <span>{event.actor ? `Akteur: ${event.actor}` : "Akteur: System"}</span>
         </div>
         {event.details ? <p>{event.details}</p> : null}
       </div>
@@ -284,7 +380,7 @@ export default function TicketDetailPage() {
   const fetchTicket = useCallback(
     async ({ silent = false } = {}) => {
       if (!ticketId) {
-        setLoadError("Ticket ID is missing.");
+        setLoadError("Die Ticket-ID fehlt.");
         setInitialLoading(false);
         return;
       }
@@ -308,7 +404,7 @@ export default function TicketDetailPage() {
         setLoadError(message);
         emitToast({
           type: "error",
-          title: "Ticket could not be loaded",
+          title: "Ticket konnte nicht geladen werden",
           description: message,
         });
       } finally {
@@ -326,19 +422,19 @@ export default function TicketDetailPage() {
   const detailBadges = useMemo(
     () => [
       {
-        label: formatLabel(ticket?.status, "Open"),
+        label: formatStatus(ticket?.status || "open"),
         variant: "neutral",
       },
       {
-        label: `Category: ${formatLabel(ticket?.category)}`,
+        label: `Kategorie: ${formatCategory(ticket?.category)}`,
         variant: "info",
       },
       {
-        label: `Priority: ${formatLabel(ticket?.priority)}`,
+        label: `Priorität: ${formatPriority(ticket?.priority)}`,
         variant: "warning",
       },
       {
-        label: `Confidence: ${formatConfidence(ticket?.confidence)}`,
+        label: `Trefferquote: ${formatConfidence(ticket?.confidence)}`,
         variant: "success",
       },
     ],
@@ -351,8 +447,8 @@ export default function TicketDetailPage() {
     if (!ticket?.id) {
       emitToast({
         type: "error",
-        title: "Review failed",
-        description: "No ticket is currently loaded.",
+        title: "Prüfung fehlgeschlagen",
+        description: "Aktuell ist kein Ticket geladen.",
       });
       return;
     }
@@ -375,15 +471,15 @@ export default function TicketDetailPage() {
 
       emitToast({
         type: "success",
-        title: "Review saved",
-        description: `Decision "${reviewDecision}" was stored successfully.`,
+        title: "Prüfung gespeichert",
+        description: `Der Entscheid "${formatReviewDecision(reviewDecision)}" wurde gespeichert.`,
       });
 
       await fetchTicket({ silent: true });
     } catch (error) {
       emitToast({
         type: "error",
-        title: "Review failed",
+        title: "Prüfung fehlgeschlagen",
         description: readErrorMessage(error),
       });
     } finally {
@@ -397,8 +493,8 @@ export default function TicketDetailPage() {
     if (!ticket?.id) {
       emitToast({
         type: "error",
-        title: "Assignment failed",
-        description: "No ticket is currently loaded.",
+        title: "Zuweisung fehlgeschlagen",
+        description: "Aktuell ist kein Ticket geladen.",
       });
       return;
     }
@@ -406,8 +502,8 @@ export default function TicketDetailPage() {
     if (!assignmentValue.trim()) {
       emitToast({
         type: "error",
-        title: "Assignment failed",
-        description: "Please enter an assignee before saving.",
+        title: "Zuweisung fehlgeschlagen",
+        description: "Bitte gib vor dem Speichern ein Team oder eine zuständige Person ein.",
       });
       return;
     }
@@ -419,20 +515,20 @@ export default function TicketDetailPage() {
         ticket_id: ticket.id,
         assigned_team: assignmentValue.trim(),
         assigned_by: "claudio",
-        assignment_note: "Assigned from TicketDetailPage",
+        assignment_note: "Zuweisung aus der Ticketdetailansicht",
       });
 
       emitToast({
         type: "success",
-        title: "Assignment saved",
-        description: `Ticket assigned to ${assignmentValue.trim()}.`,
+        title: "Zuweisung gespeichert",
+        description: `Das Ticket wurde ${assignmentValue.trim()} zugewiesen.`,
       });
 
       await fetchTicket({ silent: true });
     } catch (error) {
       emitToast({
         type: "error",
-        title: "Assignment failed",
+        title: "Zuweisung fehlgeschlagen",
         description: readErrorMessage(error),
       });
     } finally {
@@ -444,8 +540,8 @@ export default function TicketDetailPage() {
     await fetchTicket({ silent: true });
     emitToast({
       type: "success",
-      title: "Ticket refreshed",
-      description: "The latest ticket data is now displayed.",
+      title: "Ticket aktualisiert",
+      description: "Die neuesten Ticketdaten werden jetzt angezeigt.",
     });
   };
 
@@ -454,14 +550,14 @@ export default function TicketDetailPage() {
       await navigator.clipboard.writeText(String(ticket?.id ?? ""));
       emitToast({
         type: "success",
-        title: "Ticket ID copied",
-        description: `Copied ${ticket?.id} to clipboard.`,
+        title: "Ticket-ID kopiert",
+        description: `${ticket?.id} wurde in die Zwischenablage kopiert.`,
       });
     } catch {
       emitToast({
         type: "error",
-        title: "Copy failed",
-        description: "Clipboard access is not available in this browser.",
+        title: "Kopieren fehlgeschlagen",
+        description: "Der Zugriff auf die Zwischenablage ist in diesem Browser nicht verfügbar.",
       });
     }
   };
@@ -472,8 +568,8 @@ export default function TicketDetailPage() {
         <div className="detail-loading-state">
           <div className="detail-loading-spinner" />
           <div>
-            <h2>Loading ticket details</h2>
-            <p>Fetching the latest review, assignment and AI triage data.</p>
+            <h2>Ticketdetails werden geladen</h2>
+            <p>Die neuesten Prüf-, Zuweisungs- und KI-Triage-Daten werden geladen.</p>
           </div>
         </div>
       </div>
@@ -485,20 +581,20 @@ export default function TicketDetailPage() {
       <div className="ticket-detail-shell">
         <div className="detail-page-topbar">
           <Link className="detail-back-link" to="/">
-            ← Back to dashboard
+            ← Zurück zum Dashboard
           </Link>
         </div>
 
         {loadError ? (
-          <MessageBanner variant="error" title="Ticket unavailable">
+          <MessageBanner variant="error" title="Ticket nicht verfügbar">
             {loadError}
           </MessageBanner>
         ) : null}
 
         <div className="detail-empty-state detail-empty-state-large">
-          <strong>Ticket not found</strong>
+          <strong>Ticket nicht gefunden</strong>
           <p>
-            No ticket details could be loaded for ID <code>{ticketId}</code>.
+            Für die ID <code>{ticketId}</code> konnten keine Ticketdetails geladen werden.
           </p>
         </div>
       </div>
@@ -509,44 +605,44 @@ export default function TicketDetailPage() {
     <div className="ticket-detail-shell">
       <div className="detail-page-topbar">
         <Link className="detail-back-link" to="/">
-          ← Back to dashboard
+          ← Zurück zum Dashboard
         </Link>
 
         <div className="detail-action-row">
           <button
-            className="secondary-button"
+            className="detail-action-button detail-action-button-secondary"
             type="button"
             onClick={() => setActiveTab("review")}
           >
-            Review
+            Prüfung
           </button>
           <button
-            className="secondary-button"
+            className="detail-action-button detail-action-button-secondary"
             type="button"
             onClick={() => setActiveTab("assignment")}
           >
-            Assign
+            Zuweisung
           </button>
           <button
-            className="secondary-button"
+            className="detail-action-button detail-action-button-secondary"
             type="button"
             onClick={handleCopyId}
           >
-            Copy ID
+            ID kopieren
           </button>
           <button
-            className="primary-button"
+            className="detail-action-button detail-action-button-primary"
             type="button"
             onClick={handleRefresh}
             disabled={refreshing}
           >
-            {refreshing ? "Refreshing..." : "Refresh"}
+            {refreshing ? "Aktualisiere..." : "Aktualisieren"}
           </button>
         </div>
       </div>
 
       {loadError ? (
-        <MessageBanner variant="warning" title="Using last successful ticket data">
+        <MessageBanner variant="warning" title="Letzte erfolgreich geladene Ticketdaten werden verwendet">
           {loadError}
         </MessageBanner>
       ) : null}
@@ -554,11 +650,11 @@ export default function TicketDetailPage() {
       <section className="ticket-detail-hero">
         <div>
           <p className="detail-eyebrow">Ticket #{ticket.id}</p>
-          <h1>{formatLabel(ticket.title, "Untitled ticket")}</h1>
+          <h1>{formatLabel(ticket.title, "Unbenanntes Ticket")}</h1>
           <p className="detail-muted">
             {formatLabel(
               ticket.summary ?? ticket.description,
-              "No summary is available for this ticket yet."
+              "Für dieses Ticket ist noch keine Zusammenfassung verfügbar."
             )}
           </p>
         </div>
@@ -573,31 +669,35 @@ export default function TicketDetailPage() {
       </section>
 
       <section className="ticket-detail-grid">
-        <SectionCard title="Ticket metadata">
+        <SectionCard title="Ticket-Metadaten">
           <div className="detail-stats-grid">
-            <InfoStat label="Status" value={formatLabel(ticket.status, "Open")} />
-            <InfoStat label="Category" value={formatLabel(ticket.category)} />
-            <InfoStat label="Priority" value={formatLabel(ticket.priority)} />
-            <InfoStat label="Confidence" value={formatConfidence(ticket.confidence)} />
-            <InfoStat label="Assignee" value={formatLabel(ticket.assignee, "Unassigned")} />
-            <InfoStat label="Created" value={formatLabel(ticket.createdAt)} />
-            <InfoStat label="Updated" value={formatLabel(ticket.updatedAt)} />
+            <InfoStat label="Status" value={formatStatus(ticket.status)} />
             <InfoStat
-              label="Review"
-              value={formatLabel(ticket.reviewDecision, "Pending review")}
+              label="Supportbereich"
+              value={formatLabel(ticket.department, "Bank-IT Support")}
+            />
+            <InfoStat label="Kategorie" value={formatCategory(ticket.category)} />
+            <InfoStat label="Priorität" value={formatPriority(ticket.priority)} />
+            <InfoStat label="Trefferquote" value={formatConfidence(ticket.confidence)} />
+            <InfoStat label="Zugewiesen an" value={formatLabel(ticket.assignee, "Noch nicht zugewiesen")} />
+            <InfoStat label="Erstellt" value={formatLabel(ticket.createdAt)} />
+            <InfoStat label="Aktualisiert" value={formatLabel(ticket.updatedAt)} />
+            <InfoStat
+              label="Prüfung"
+              value={formatReviewDecision(ticket.reviewDecision || "pending")}
             />
           </div>
         </SectionCard>
 
-        <SectionCard title="Ticket content">
+        <SectionCard title="Ticketinhalt">
           {ticket.description ? (
             <div className="detail-content-block">
               <p>{ticket.description}</p>
             </div>
           ) : (
             <EmptyInline
-              title="No detailed description"
-              text="This ticket currently has no long-form description."
+              title="Keine Detailbeschreibung"
+              text="Dieses Ticket hat aktuell keine ausführliche Beschreibung."
             />
           )}
         </SectionCard>
@@ -620,49 +720,77 @@ export default function TicketDetailPage() {
         <div className="detail-tab-panel">
           {activeTab === "overview" ? (
             <div className="ticket-detail-grid">
-              <SectionCard title="AI recommendation">
+              <SectionCard title="KI-Empfehlung">
                 {ticket.category || ticket.priority || ticket.confidence ? (
                   <div className="detail-stats-grid">
-                    <InfoStat label="Suggested category" value={formatLabel(ticket.category)} />
-                    <InfoStat label="Suggested priority" value={formatLabel(ticket.priority)} />
+                    <InfoStat label="Empfohlene Kategorie" value={formatCategory(ticket.category)} />
+                    <InfoStat label="Empfohlene Priorität" value={formatPriority(ticket.priority)} />
                     <InfoStat
-                      label="Model confidence"
+                      label="Modell-Trefferquote"
                       value={formatConfidence(ticket.confidence)}
+                    />
+                    <InfoStat
+                      label="Empfohlenes Team"
+                      value={formatLabel(ticket.suggestedTeam, "Unbekannt")}
+                    />
+                    <InfoStat
+                      label="Empfohlene Abteilung"
+                      value={formatLabel(ticket.analysis?.suggested_department, "Unbekannt")}
                     />
                   </div>
                 ) : (
                   <EmptyInline
-                    title="No AI recommendation available"
-                    text="The ticket has not received a triage recommendation yet."
+                    title="Keine KI-Empfehlung verfügbar"
+                    text="Für dieses Ticket liegt noch keine Triage-Empfehlung vor."
                   />
                 )}
               </SectionCard>
 
-              <SectionCard title="Current decision context">
+              <SectionCard title="Begründung">
+                {ticket.rationale || ticket.nextStep ? (
+                  <div className="detail-stats-grid">
+                    <InfoStat
+                      label="Begründung"
+                      value={formatLabel(ticket.rationale, "Keine Begründung vorhanden")}
+                    />
+                    <InfoStat
+                      label="Nächster Schritt"
+                      value={formatLabel(ticket.nextStep, "Kein nächster Schritt vorhanden")}
+                    />
+                  </div>
+                ) : (
+                  <EmptyInline
+                    title="Keine Begründung verfügbar"
+                    text="Die KI hat für diese Ticketempfehlung keine Begründung geliefert."
+                  />
+                )}
+              </SectionCard>
+
+              <SectionCard title="Aktueller Entscheidungsstand">
                 {ticket.reviewDecision || ticket.reviewReason || ticket.assignee ? (
                   <div className="detail-stats-grid">
                     <InfoStat
-                      label="Review decision"
-                      value={formatLabel(ticket.reviewDecision, "Pending")}
+                      label="Prüfentscheid"
+                      value={formatReviewDecision(ticket.reviewDecision || "pending")}
                     />
                     <InfoStat
-                      label="Review notes"
-                      value={formatLabel(ticket.reviewReason, "No review notes")}
+                      label="Prüfnotizen"
+                      value={formatLabel(ticket.reviewReason, "Keine Prüfnotizen")}
                     />
                     <InfoStat
-                      label="Assigned to"
-                      value={formatLabel(ticket.assignee, "Unassigned")}
+                      label="Zugewiesen an"
+                      value={formatLabel(ticket.assignee, "Noch nicht zugewiesen")}
                     />
                   </div>
                 ) : (
                   <EmptyInline
-                    title="No operational updates yet"
-                    text="This ticket has not been reviewed or assigned yet."
+                    title="Noch keine operativen Aktualisierungen"
+                    text="Dieses Ticket wurde noch nicht geprüft oder zugewiesen."
                   />
                 )}
               </SectionCard>
 
-              <SectionCard title="History & audit trail">
+              <SectionCard title="Verlauf & Audit-Trail">
                 {ticket.events.length ? (
                   <div className="detail-events-list">
                     {ticket.events.map((event) => (
@@ -671,8 +799,8 @@ export default function TicketDetailPage() {
                   </div>
                 ) : (
                   <EmptyInline
-                    title="No history available"
-                    text="This ticket has no recorded audit events yet."
+                    title="Kein Verlauf verfügbar"
+                    text="Für dieses Ticket sind noch keine Audit-Ereignisse vorhanden."
                   />
                 )}
               </SectionCard>
@@ -680,27 +808,27 @@ export default function TicketDetailPage() {
           ) : null}
 
           {activeTab === "review" ? (
-            <SectionCard title="Review decision">
+            <SectionCard title="Prüfentscheid">
               <form className="detail-form" onSubmit={handleReviewSubmit}>
                 <label className="detail-form-field">
-                  <span>Decision</span>
+                  <span>Entscheid</span>
                   <select
                     value={reviewDecision}
                     onChange={(event) => setReviewDecision(event.target.value)}
                     disabled={reviewSubmitting}
                   >
-                    <option value="accepted">Accept</option>
-                    <option value="rejected">Reject</option>
-                    <option value="needs_review">Needs review</option>
-                    <option value="escalated">Escalate</option>
+                    <option value="accepted">Akzeptieren</option>
+                    <option value="rejected">Ablehnen</option>
+                    <option value="needs_review">Weitere Prüfung nötig</option>
+                    <option value="escalated">Eskalieren</option>
                   </select>
                 </label>
 
                 <label className="detail-form-field">
-                  <span>Reason / notes</span>
+                  <span>Begründung / Notizen</span>
                   <textarea
                     rows="5"
-                    placeholder="Add reviewer rationale or corrective notes..."
+                    placeholder="Prüfbegründung oder Korrekturhinweise ergänzen..."
                     value={reviewReason}
                     onChange={(event) => setReviewReason(event.target.value)}
                     disabled={reviewSubmitting}
@@ -713,7 +841,7 @@ export default function TicketDetailPage() {
                     type="submit"
                     disabled={reviewSubmitting}
                   >
-                    {reviewSubmitting ? "Saving review..." : "Save review"}
+                    {reviewSubmitting ? "Speichere Prüfung..." : "Prüfung speichern"}
                   </button>
                 </div>
               </form>
@@ -721,13 +849,13 @@ export default function TicketDetailPage() {
           ) : null}
 
           {activeTab === "assignment" ? (
-            <SectionCard title="Assignment">
+            <SectionCard title="Zuweisung">
               <form className="detail-form" onSubmit={handleAssignmentSubmit}>
                 <label className="detail-form-field">
-                  <span>Assignee / team</span>
+                  <span>Zuständiges Team / Person</span>
                   <input
                     type="text"
-                    placeholder="e.g. engineering-team"
+                    placeholder="z. B. it-support-team"
                     value={assignmentValue}
                     onChange={(event) => setAssignmentValue(event.target.value)}
                     disabled={assignmentSubmitting}
@@ -740,7 +868,7 @@ export default function TicketDetailPage() {
                     type="submit"
                     disabled={assignmentSubmitting}
                   >
-                    {assignmentSubmitting ? "Saving assignment..." : "Save assignment"}
+                    {assignmentSubmitting ? "Speichere Zuweisung..." : "Zuweisung speichern"}
                   </button>
                 </div>
               </form>

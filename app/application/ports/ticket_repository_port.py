@@ -19,6 +19,10 @@ class TicketRepositoryPort(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def update_department(self, ticket_id: str, department: str) -> TicketRecord:
+        raise NotImplementedError
+
+    @abstractmethod
     def attach_decision(self, ticket_id: str, decision: TriageDecision) -> TicketRecord:
         raise NotImplementedError
 

@@ -6,8 +6,8 @@ export default function TicketList({
   loading,
   selectedTicketId,
 }) {
-  if (loading) return <p>Loading tickets...</p>;
-  if (!tickets.length) return <p>No tickets found.</p>;
+  if (loading) return <p>Tickets werden geladen...</p>;
+  if (!tickets.length) return <p>Keine Tickets gefunden.</p>;
 
   return (
     <div className="ticket-list">
@@ -23,7 +23,8 @@ export default function TicketList({
               <Badge value={ticket.status} type="status" />
             </div>
             <span>Reporter: {ticket.reporter || "—"}</span>
-            <span>Source: {ticket.source}</span>
+            <span>Supportbereich: {ticket.department || "Bank-IT Support"}</span>
+            <span>Quelle: {ticket.source}</span>
           </div>
         </Link>
       ))}
