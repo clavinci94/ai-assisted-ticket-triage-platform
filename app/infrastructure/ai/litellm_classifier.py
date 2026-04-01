@@ -200,8 +200,47 @@ class LitellmClassifier(ClassifierPort):
         except json.JSONDecodeError:
             match = re.search(r"\{.*\}", content, re.S)
             if match:
-                return json.loads(match.group(0))
+                try:
+                    return json.loads(match.group(0))
+                except json.JSONDecodeError:
+                    pass
+
+            # Fallback for truncated JSON responses: salvage known fields if present.
+            recovered = self._recover_partial_json(content)
+            if recovered:
+                return recovered
+
             raise ValueError(f"Unable to parse LLM response as JSON: {content!r}")
+
+    def _recover_partial_json(self, content: str) -> dict:
+        supported_keys = [
+            "category",
+            "priority",
+            "suggested_team",
+            "suggested_department",
+            "summary",
+            "next_step",
+            "rationale",
+            "category_confidence",
+            "priority_confidence",
+        ]
+
+        recovered: dict[str, str | float] = {}
+
+        for key in supported_keys:
+            string_match = re.search(rf'"{key}"\s*:\s*"([^"]*)"', content)
+            if string_match:
+                recovered[key] = string_match.group(1).strip()
+                continue
+
+            float_match = re.search(rf'"{key}"\s*:\s*([0-9]+(?:\.[0-9]+)?)', content)
+            if float_match:
+                try:
+                    recovered[key] = float(float_match.group(1))
+                except ValueError:
+                    continue
+
+        return recovered
 
     def _parse_category(self, category_text: str) -> TicketCategory:
         normalized = str(category_text).strip().lower()

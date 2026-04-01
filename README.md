@@ -4,6 +4,16 @@ Modern ticket triage and operations dashboard for internal support teams. The pr
 
 The current product state covers the full flow from ticket intake to AI recommendation, manual review, assignment, status handling, audit trail, workbench views, and reporting pages.
 
+## 🔄 Recent Updates (April 2026)
+
+**Commit `882d354`** — *refactor: Improve LLM robustness & enhance dashboard UX*
+- **Backend**: LiteLLM Classifier now gracefully recovers from truncated JSON responses via `_recover_partial_json()` method
+- **Frontend**: Dashboard hero section now displays operative KPI metrics (Offen/Review/Zuweisung)
+- **UI/UX**: Enhanced command-bar grid layout, reduced visual noise, improved responsive styling
+- **QA**: All endpoints tested, security verified (API keys in `.env` only, not hardcoded)
+
+See [CHANGES.md](./CHANGES.md) for detailed technical breakdown.
+
 ## Highlights
 
 - AI-assisted ticket intake with preview before persistence

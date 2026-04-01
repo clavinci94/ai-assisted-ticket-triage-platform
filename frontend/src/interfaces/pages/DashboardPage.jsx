@@ -467,6 +467,20 @@ export default function DashboardPage() {
           <span className="hero-summary-label">Kritische Fälle</span>
           <strong className="hero-summary-value">{criticalTickets.length}</strong>
           <span className="hero-summary-text">Tickets mit hoher oder kritischer Priorität im aktuellen Bestand</span>
+          <div className="hero-summary-metrics" aria-label="Operative Schnellkennzahlen">
+            <div className="hero-summary-metric">
+              <span>Offen</span>
+              <strong>{openTicketsCount}</strong>
+            </div>
+            <div className="hero-summary-metric">
+              <span>Review</span>
+              <strong>{reviewCoverage}%</strong>
+            </div>
+            <div className="hero-summary-metric">
+              <span>Zuweisung</span>
+              <strong>{assignmentRate}%</strong>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -518,7 +532,7 @@ export default function DashboardPage() {
             <span>Direktaktionen</span>
             <p>Springe in Erfassung oder Analysebereiche, ohne den Fokus zu verlieren.</p>
           </div>
-          <div className="dashboard-command-grid">
+          <div className="dashboard-command-grid dashboard-command-grid-actions">
             <DashboardCommandButton
               label="Ticket erfassen"
               helper="Neuen Fall anlegen"
