@@ -238,6 +238,52 @@ Frontend URL:
 
 The frontend uses the backend on `http://127.0.0.1:8000` by default. If needed, provide `VITE_API_BASE_URL`.
 
+### 3. One-Command Dev Start
+
+After installing backend and frontend dependencies once, you can start both services from the repository root:
+
+```bash
+./dev.sh
+```
+
+Default URLs:
+
+- Backend API: `http://127.0.0.1:8000`
+- Frontend App: `http://127.0.0.1:5173`
+
+Optional overrides:
+
+```bash
+BACKEND_PORT=8001 FRONTEND_PORT=5174 ./dev.sh
+```
+
+## Deploy on Render
+
+This repository now includes a ready-to-use [render.yaml](./render.yaml) for:
+
+- a FastAPI backend web service
+- a React/Vite static frontend
+- a Render Postgres database
+
+Recommended setup:
+
+1. Push the repository to GitHub.
+2. In Render, create a new Blueprint and select this repository.
+3. During setup, provide values for:
+   - `LITELLM_API_BASE`
+   - `LITELLM_API_KEY`
+   - `VITE_API_BASE_URL`
+4. For `VITE_API_BASE_URL`, use your backend Render URL, for example:
+   - `https://ai-assisted-ticket-triage-api.onrender.com`
+5. After the first deploy, open the frontend URL and verify that it can reach the backend.
+
+Notes:
+
+- The backend start command on Render is `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+- The backend accepts `DATABASE_URL`, which is used automatically by the included Render Postgres service.
+- The frontend includes an SPA rewrite to `/index.html`, so React Router routes work on refresh.
+- Render free Postgres is suitable for testing, but it has platform limitations and is not ideal for production workloads.
+
 ## Environment Variables
 
 The preferred setup for this repository is LiteLLM proxy usage.

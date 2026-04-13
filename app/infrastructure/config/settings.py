@@ -19,6 +19,7 @@ class ApiSettings:
     app_title: str
     app_version: str
     cors_origins: tuple[str, ...]
+    cors_origin_regex: str | None
 
 
 def _parse_origins(raw_value: str | None) -> tuple[str, ...]:
@@ -35,4 +36,5 @@ def get_settings() -> ApiSettings:
         app_title=os.getenv("APP_TITLE", "AI-assisted Requirements & Ticket Triage Platform"),
         app_version=os.getenv("APP_VERSION", "0.1.0"),
         cors_origins=_parse_origins(os.getenv("CORS_ALLOW_ORIGINS")),
+        cors_origin_regex=os.getenv("CORS_ALLOW_ORIGIN_REGEX"),
     )

@@ -1,11 +1,22 @@
+import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = "sqlite:///./triage.db"
+
+def _normalize_database_url(raw_url: str) -> str:
+    if raw_url.startswith("postgres://"):
+        return raw_url.replace("postgres://", "postgresql+psycopg://", 1)
+
+    return raw_url
+
+
+DATABASE_URL = _normalize_database_url(os.getenv("DATABASE_URL", "sqlite:///./triage.db"))
+ENGINE_KWARGS = {"connect_args": {"check_same_thread": False}} if DATABASE_URL.startswith("sqlite") else {}
 
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False},
+    **ENGINE_KWARGS,
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
