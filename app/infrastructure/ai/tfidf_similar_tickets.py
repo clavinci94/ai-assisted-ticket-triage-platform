@@ -55,10 +55,16 @@ class TfidfSimilarTicketsAdapter(SimilarTicketsPort):
 
     MIN_CORPUS_SIZE = 3  # below this, retrieval is not meaningful
 
+    # Empirically tuned on small corpora (< 200 tickets): below ~0.25 cosine,
+    # TF-IDF on 1–2-grams produces matches that share a handful of incidental
+    # tokens but are not topically related — they clutter the UI and erode
+    # operator trust. Above this floor, a match means real lexical overlap.
+    DEFAULT_MIN_SIMILARITY = 0.25
+
     def __init__(
         self,
         session_factory: Callable[[], Session],
-        min_similarity: float = 0.12,
+        min_similarity: float = DEFAULT_MIN_SIMILARITY,
     ) -> None:
         self._session_factory = session_factory
         self._min_similarity = min_similarity

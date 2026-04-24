@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useSetPageHeading } from "../components/PageHeadingContext";
 import { useToast } from "../components/ToastProvider";
 import { DEFAULT_USER_SETTINGS, loadUserSettings, saveUserSettings } from "../../infrastructure/storage/userSettingsStore";
 
@@ -18,10 +18,11 @@ const REPORT_START_PAGES = [
 ];
 
 export default function SettingsPage() {
-  const navigate = useNavigate();
   const { showToast } = useToast();
   const initialSettings = useMemo(() => loadUserSettings(), []);
   const [settings, setSettings] = useState(initialSettings);
+
+  useSetPageHeading("Einstellungen");
 
   function handleChange(key, value) {
     setSettings((current) => ({ ...current, [key]: value }));
@@ -45,103 +46,56 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="app-shell dashboard-shell">
-      <header className="dashboard-hero">
-        <div className="dashboard-hero-copy">
-          <p className="eyebrow">Governance</p>
-          <h1>Einstellungen</h1>
-          <p className="subtitle">
-            Lokale Präferenzen für Operator-Namen und Standardnavigation im Dashboard.
-          </p>
+    <div className="app-shell settings-shell">
+      <form className="settings-form" onSubmit={handleSubmit}>
+        <div className="settings-field">
+          <label htmlFor="settings-operator">Operator-Name</label>
+          <p className="settings-helper">Wird in Workbench, Kommentaren und Statuswechseln als Akteur verwendet.</p>
+          <input
+            id="settings-operator"
+            type="text"
+            value={settings.operatorName}
+            onChange={(event) => handleChange("operatorName", event.target.value)}
+            placeholder="z. B. Claudio"
+          />
         </div>
-      </header>
 
-      <section className="dashboard-pathbar">
-        <div className="dashboard-breadcrumbs">
-          <span>Governance</span>
-          <span>•</span>
-          <span>Einstellungen</span>
+        <div className="settings-field">
+          <label htmlFor="settings-workspace">Dashboard-Startbereich</label>
+          <p className="settings-helper">Bestimmt die Standard-Ansicht, wenn du das Dashboard ohne Parameter öffnest.</p>
+          <select
+            id="settings-workspace"
+            value={settings.dashboardWorkspace}
+            onChange={(event) => handleChange("dashboardWorkspace", event.target.value)}
+          >
+            {DASHBOARD_WORKSPACES.map((workspace) => (
+              <option key={workspace.value} value={workspace.value}>
+                {workspace.label}
+              </option>
+            ))}
+          </select>
         </div>
-        <div className="dashboard-actions">
-          <button type="button" onClick={() => navigate("/dashboard")}>Dashboard</button>
-          <button type="button" onClick={() => navigate("/reports")}>Reports</button>
+
+        <div className="settings-field">
+          <label htmlFor="settings-reports">Standardseite für Reports</label>
+          <p className="settings-helper">Welcher Reporting-Tab beim Öffnen von Reports vorausgewählt wird.</p>
+          <select
+            id="settings-reports"
+            value={settings.reportsStartPage}
+            onChange={(event) => handleChange("reportsStartPage", event.target.value)}
+          >
+            {REPORT_START_PAGES.map((page) => (
+              <option key={page.value} value={page.value}>
+                {page.label}
+              </option>
+            ))}
+          </select>
         </div>
-      </section>
 
-      <section className="settings-grid">
-        <form className="settings-panel" onSubmit={handleSubmit}>
-          <div className="settings-panel-header">
-            <span className="chart-card-eyebrow">Operator</span>
-            <h3>Arbeitsprofil</h3>
-            <p>Diese Werte beeinflussen Workbench, Detailansicht und Standardnavigation.</p>
-          </div>
-
-          <div className="settings-form-grid">
-            <label className="detail-form-field">
-              <span>Operator-Name</span>
-              <input
-                type="text"
-                value={settings.operatorName}
-                onChange={(event) => handleChange("operatorName", event.target.value)}
-                placeholder="z. B. Claudio"
-              />
-            </label>
-
-            <label className="detail-form-field">
-              <span>Dashboard-Startbereich</span>
-              <select
-                value={settings.dashboardWorkspace}
-                onChange={(event) => handleChange("dashboardWorkspace", event.target.value)}
-              >
-                {DASHBOARD_WORKSPACES.map((workspace) => (
-                  <option key={workspace.value} value={workspace.value}>
-                    {workspace.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="detail-form-field">
-              <span>Standardseite für Reports</span>
-              <select
-                value={settings.reportsStartPage}
-                onChange={(event) => handleChange("reportsStartPage", event.target.value)}
-              >
-                {REPORT_START_PAGES.map((page) => (
-                  <option key={page.value} value={page.value}>
-                    {page.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="detail-action-row">
-            <button className="primary-button" type="submit">Einstellungen speichern</button>
-          </div>
-        </form>
-
-        <div className="settings-panel">
-          <div className="settings-panel-header">
-            <span className="chart-card-eyebrow">Wirkung</span>
-            <h3>Wo die Einstellungen greifen</h3>
-          </div>
-          <div className="settings-note-list">
-            <div className="settings-note-item">
-              <strong>Operator-Name</strong>
-              <p>Wird in Workbench, Ticket-Detailansicht, Kommentaren und Statuswechseln verwendet.</p>
-            </div>
-            <div className="settings-note-item">
-              <strong>Dashboard-Startbereich</strong>
-              <p>Wird genutzt, wenn du das Dashboard ohne expliziten Workspace öffnest.</p>
-            </div>
-            <div className="settings-note-item">
-              <strong>Reports-Startseite</strong>
-              <p>Bestimmt, welcher Reporting-Bereich als Standard-Einstieg dient.</p>
-            </div>
-          </div>
+        <div className="settings-actions">
+          <button type="submit" className="primary-button">Einstellungen speichern</button>
         </div>
-      </section>
+      </form>
     </div>
   );
 }

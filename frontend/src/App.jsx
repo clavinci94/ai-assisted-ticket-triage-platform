@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { BrowserRouter, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
+import {
+  ChartIcon,
+  GearIcon,
+  HomeIcon,
+  ListIcon,
+  PlusIcon,
+  QuestionIcon,
+  SearchIcon,
+} from "./interfaces/components/Icon";
+import { PageHeadingProvider, usePageHeading } from "./interfaces/components/PageHeadingContext";
 import { ToastProvider } from "./interfaces/components/ToastProvider";
 import DashboardCreatePage from "./interfaces/pages/DashboardCreatePage";
 import DashboardDepartmentsPage from "./interfaces/pages/DashboardDepartmentsPage";
@@ -15,144 +25,49 @@ import TicketDetailPage from "./interfaces/pages/TicketDetailPage";
 import TicketsPage from "./interfaces/pages/TicketsPage";
 import { getOperatorInitials, loadUserSettings } from "./infrastructure/storage/userSettingsStore";
 
-const NAV_SECTIONS = [
-  {
-    label: "Einführung",
-    items: [
-      { to: "/", label: "Startseite", end: true },
-    ],
-  },
-  {
-    label: "Arbeitsbereich",
-    items: [
-      { to: "/dashboard", label: "Übersicht" },
-      { to: "/tickets", label: "Alle Tickets", end: true },
-      { to: "/tickets/mine", label: "Meine Tickets", end: true },
-      { to: "/tickets/open", label: "Offene Tickets", end: true },
-      { to: "/tickets/escalations", label: "Eskalationen", end: true },
-      { to: "/dashboard/create", label: "Ticket erfassen" },
-    ],
-  },
-  {
-    label: "Reporting & Governance",
-    items: [
-      { to: "/reports", label: "Reports", end: true },
-      { to: "/reports/kpis", label: "KPIs" },
-      { to: "/reports/departments", label: "Abteilungen" },
-      { to: "/reports/teams", label: "Teams" },
-      { to: "/reports/sla", label: "SLA / Fristen" },
-      { to: "/settings", label: "Einstellungen" },
-    ],
-  },
+const NAV_ITEMS = [
+  { to: "/dashboard", label: "Übersicht", end: true, Icon: HomeIcon },
+  { to: "/tickets", label: "Tickets", Icon: ListIcon },
+  { to: "/reports", label: "Reports", Icon: ChartIcon },
+  { to: "/settings", label: "Einstellungen", end: true, Icon: GearIcon },
 ];
 
-const ROUTE_META = [
-  {
-    match: (pathname) => pathname === "/",
-    title: "Plattform-Einstieg",
-    subtitle: "Verstehe Aufbau, Bedienung und die Rolle der einzelnen Bereiche.",
-  },
-  {
-    match: (pathname) => pathname === "/dashboard",
-    title: "Operative Arbeitszentrale",
-    subtitle: "Überblick, Warteschlange und Handlungsbedarf in einem fokussierten Arbeitsbereich.",
-  },
-  {
-    match: (pathname) => pathname === "/tickets",
-    title: "Alle Tickets",
-    subtitle: "Zentrale Workbench für Suche, Filter, Bulk-Aktionen und Tabellenarbeit.",
-  },
-  {
-    match: (pathname) => pathname === "/tickets/mine",
-    title: "Meine Tickets",
-    subtitle: "Persönliche Sicht auf Vorgänge, die deinem Operator-Namen zugeordnet sind.",
-  },
-  {
-    match: (pathname) => pathname === "/tickets/open",
-    title: "Offene Tickets",
-    subtitle: "Alle noch offenen Tickets in einer fokussierten Bearbeitungsansicht.",
-  },
-  {
-    match: (pathname) => pathname === "/tickets/escalations",
-    title: "Eskalationen",
-    subtitle: "High- und Critical-Fälle mit unmittelbarem Handlungsbedarf.",
-  },
-  {
-    match: (pathname) => pathname === "/dashboard/create",
-    title: "Ticket-Erfassung",
-    subtitle: "Neue Fälle aufnehmen und mit KI-Empfehlung für die Abteilung anlegen.",
-  },
-  {
-    match: (pathname) => pathname === "/reports",
-    title: "Reports Übersicht",
-    subtitle: "Volumen, Backlog, SLA und Ownership in einem gemeinsamen Reporting-Hub.",
-  },
-  {
-    match: (pathname) => pathname === "/dashboard/kpis" || pathname === "/reports/kpis",
-    title: "KPI-Ansicht",
-    subtitle: "Status, Prioritäten und Prozesskennzahlen für das operative Reporting.",
-  },
-  {
-    match: (pathname) => pathname === "/dashboard/departments" || pathname === "/reports/departments",
-    title: "Abteilungsanalyse",
-    subtitle: "Verteilung, Auslastung und Ownership nach Fachbereich im Blick behalten.",
-  },
-  {
-    match: (pathname) => pathname === "/reports/teams",
-    title: "Teamreport",
-    subtitle: "Teamlast, Ownership und Bearbeitungsfokus pro Squad oder Service Desk.",
-  },
-  {
-    match: (pathname) => pathname === "/reports/sla",
-    title: "SLA & Fristen",
-    subtitle: "Fristverletzungen, Due-Soon-Fälle und SLA-Risiken operativ steuern.",
-  },
-  {
-    match: (pathname) => pathname === "/settings",
-    title: "Einstellungen",
-    subtitle: "Lokale Präferenzen für Operator, Dashboard-Einstieg und Reporting-Navigation.",
-  },
-  {
-    match: (pathname) => pathname.startsWith("/tickets/"),
-    title: "Ticket-Detailansicht",
-    subtitle: "Prüfen, zuweisen und den Audit-Trail direkt am einzelnen Vorgang steuern.",
-  },
+const FALLBACK_TITLES = [
+  { match: (p) => p === "/dashboard", title: "Übersicht" },
+  { match: (p) => p === "/dashboard/create", title: "Ticket erfassen" },
+  { match: (p) => p.startsWith("/tickets") && !/^\/tickets\/[^/]+$/.test(p), title: "Tickets" },
+  { match: (p) => /^\/tickets\/[^/]+$/.test(p), title: "Ticket" },
+  { match: (p) => p.startsWith("/reports"), title: "Reports" },
+  { match: (p) => p === "/settings", title: "Einstellungen" },
+  { match: (p) => p === "/help", title: "Hilfe" },
 ];
+
+function resolveFallbackTitle(pathname) {
+  const hit = FALLBACK_TITLES.find((entry) => entry.match(pathname));
+  return hit ? hit.title : "Triage";
+}
 
 function AppSidebar() {
   return (
     <aside className="app-sidebar">
-      <div className="app-sidebar-brand">
-        <span className="app-sidebar-brand-label">Enterprise Support</span>
-        <strong>Ticket-Triage-Plattform</strong>
-        <p>Interne Arbeitsoberfläche für Triage, Prüfung und Routing.</p>
-      </div>
+      <div className="app-sidebar-brand">Triage</div>
 
       <nav className="app-sidebar-nav" aria-label="Hauptnavigation">
-        {NAV_SECTIONS.map((section) => (
-          <div key={section.label} className="app-sidebar-group">
-            <span className="app-sidebar-group-label">{section.label}</span>
-            <div className="app-sidebar-links">
-              {section.items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className={({ isActive }) => `app-sidebar-link ${isActive ? "active" : ""}`}
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
-          </div>
-        ))}
+        {NAV_ITEMS.map((item) => {
+          const IconComponent = item.Icon;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) => `app-sidebar-link ${isActive ? "active" : ""}`}
+            >
+              <IconComponent className="app-sidebar-link-icon" width={16} height={16} />
+              <span>{item.label}</span>
+            </NavLink>
+          );
+        })}
       </nav>
-
-      <div className="app-sidebar-card">
-        <span className="app-sidebar-card-label">Arbeitsmodus</span>
-        <strong>Operativer Fokus</strong>
-        <p>Dashboard, Prüfung und Routing sind auf schnelle Entscheidungen im Tagesgeschäft ausgerichtet.</p>
-      </div>
     </aside>
   );
 }
@@ -160,91 +75,95 @@ function AppSidebar() {
 function AppTopbar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { heading } = usePageHeading();
   const [globalSearch, setGlobalSearch] = useState("");
   const [profileLabel, setProfileLabel] = useState("OP");
-  const [reportsStartPage, setReportsStartPage] = useState("/reports");
 
-  const routeMeta = useMemo(
-    () =>
-      ROUTE_META.find((entry) => entry.match(location.pathname)) || {
-        title: "Ticket-Triage-Plattform",
-        subtitle: "Arbeite fokussiert über Dashboard, Detailansichten und Analysebereiche.",
-      },
-    [location.pathname]
-  );
+  const effectiveTitle = heading.title || resolveFallbackTitle(location.pathname);
+  const effectiveCount = heading.count;
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing URL → state is exactly the kind of external-sync effect allowed by the rule.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- URL → state sync.
     setGlobalSearch(params.get("q") || "");
   }, [location.search]);
 
   useEffect(() => {
     const syncSettings = () => {
-      const settings = loadUserSettings();
+      loadUserSettings();
       setProfileLabel(getOperatorInitials());
-      setReportsStartPage(settings.reportsStartPage || "/reports");
     };
-
     syncSettings();
     window.addEventListener("ticket-triage-settings-updated", syncSettings);
-
     return () => {
       window.removeEventListener("ticket-triage-settings-updated", syncSettings);
     };
   }, [location.pathname]);
 
+  useEffect(() => {
+    const handler = (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        const input = document.querySelector('[data-global-search] input');
+        input?.focus();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   const handleSearchSubmit = (event) => {
     event.preventDefault();
-
     const params = new URLSearchParams();
-
-    if (globalSearch.trim()) {
-      params.set("q", globalSearch.trim());
-    }
-
+    if (globalSearch.trim()) params.set("q", globalSearch.trim());
     navigate(`/tickets?${params.toString()}`);
   };
 
   return (
     <header className="app-topbar">
-      <div className="app-topbar-copy">
-        <span className="app-topbar-eyebrow">Ticket Operations</span>
-        <strong>{routeMeta.title}</strong>
-        <p>{routeMeta.subtitle}</p>
+      <div className="app-topbar-title">
+        <strong>{effectiveTitle}</strong>
+        {effectiveCount != null ? <span className="app-topbar-count tabular-nums">{effectiveCount}</span> : null}
       </div>
 
+      <form className="app-topbar-search" data-global-search onSubmit={handleSearchSubmit}>
+        <SearchIcon className="app-topbar-search-icon" width={14} height={14} />
+        <input
+          type="search"
+          placeholder="Tickets, IDs oder Reporter durchsuchen"
+          value={globalSearch}
+          onChange={(event) => setGlobalSearch(event.target.value)}
+        />
+        <kbd className="app-topbar-kbd">⌘K</kbd>
+      </form>
+
       <div className="app-topbar-actions">
-        <form className="app-topbar-search" onSubmit={handleSearchSubmit}>
-          <input
-            type="search"
-            placeholder="Tickets, IDs oder Reporter durchsuchen"
-            value={globalSearch}
-            onChange={(event) => setGlobalSearch(event.target.value)}
-          />
-          <button type="submit">Suchen</button>
-        </form>
-
-        <button type="button" className="app-topbar-action app-topbar-action-primary" onClick={() => navigate("/dashboard/create")}>
-          Neues Ticket
-        </button>
-
-        <button type="button" className="app-topbar-action" onClick={() => navigate("/")}>
-          Hinweise
-          <span className="app-topbar-pill">3</span>
-        </button>
-
-        <button type="button" className="app-topbar-action" onClick={() => navigate(reportsStartPage)}>
-          Reports
+        <button
+          type="button"
+          className="app-topbar-icon-button"
+          onClick={() => navigate("/help")}
+          title="Hilfe & Plattform-Einstieg"
+          aria-label="Hilfe"
+        >
+          <QuestionIcon width={16} height={16} />
         </button>
 
         <button
           type="button"
           className="app-topbar-profile"
           onClick={() => navigate("/settings")}
-          title="Zu den Einstellungen"
+          title="Einstellungen"
         >
           {profileLabel}
+        </button>
+
+        <button
+          type="button"
+          className="app-topbar-primary"
+          onClick={() => navigate("/dashboard/create")}
+        >
+          <PlusIcon width={14} height={14} />
+          <span>Neues Ticket</span>
         </button>
       </div>
     </header>
@@ -255,28 +174,26 @@ function AppLayout() {
   return (
     <div className="app-frame">
       <AppSidebar />
-
       <div className="app-main">
         <AppTopbar />
-
         <main className="app-content">
           <Routes>
-            <Route path="/" element={<DashboardLandingPage />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/dashboard/departments" element={<DashboardDepartmentsPage />} />
             <Route path="/dashboard/create" element={<DashboardCreatePage />} />
-            <Route path="/dashboard/kpis" element={<DashboardKpisPage />} />
+            <Route path="/tickets" element={<TicketsPage initialView="all" />} />
+            <Route path="/tickets/mine" element={<TicketsPage initialView="mine" />} />
+            <Route path="/tickets/open" element={<TicketsPage initialView="open" />} />
+            <Route path="/tickets/escalations" element={<TicketsPage initialView="escalations" />} />
+            <Route path="/tickets/:ticketId" element={<TicketDetailPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/reports/kpis" element={<DashboardKpisPage />} />
             <Route path="/reports/departments" element={<DashboardDepartmentsPage />} />
             <Route path="/reports/teams" element={<TeamsPage />} />
             <Route path="/reports/sla" element={<SlaPage />} />
             <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/tickets" element={<TicketsPage initialView="all" />} />
-            <Route path="/tickets/mine" element={<TicketsPage initialView="mine" />} />
-            <Route path="/tickets/open" element={<TicketsPage initialView="open" />} />
-            <Route path="/tickets/escalations" element={<TicketsPage initialView="escalations" />} />
-            <Route path="/tickets/:ticketId" element={<TicketDetailPage />} />
+            <Route path="/help" element={<DashboardLandingPage />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </main>
       </div>
@@ -284,11 +201,22 @@ function AppLayout() {
   );
 }
 
+// Hush: heading read in AppTopbar but consumer also sets, so put
+// provider OUTSIDE routes so every screen can push heading updates.
+function AppShell() {
+  // Placeholder kept for future provider composition — context stays
+  // above AppLayout so both sidebar and topbar consume the same heading.
+  useMemo(() => null, []); // no-op to keep linter quiet while structure is stable
+  return <AppLayout />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <ToastProvider>
-        <AppLayout />
+        <PageHeadingProvider>
+          <AppShell />
+        </PageHeadingProvider>
       </ToastProvider>
     </BrowserRouter>
   );

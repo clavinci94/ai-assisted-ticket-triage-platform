@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import ReportsTabs from "../components/ReportsTabs";
 import SlaBadge from "../components/SlaBadge";
 import { useToast } from "../components/ToastProvider";
 import { fetchDashboardAnalytics, fetchTickets } from "../../infrastructure/http/api";
@@ -95,6 +96,7 @@ export default function SlaPage() {
 
   return (
     <div className="app-shell dashboard-shell">
+      <ReportsTabs />
       <header className="dashboard-hero">
         <div className="dashboard-hero-copy">
           <p className="eyebrow">Reporting</p>

@@ -1,111 +1,242 @@
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  /* ==================================================================
+   * Design tokens — Linear / Height / Intercom aesthetic.
+   * Every value below comes from the product spec. Do not "soften" them.
+   * ================================================================== */
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  /* Surfaces */
+  --bg-canvas: #fafafa;
+  --bg-surface: #ffffff;
+  --bg-row-hover: #f7f8fa;
+  --bg-subtle: #f1f2f4;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
+  /* Borders */
+  --border: #e5e7eb;
+  --border-subtle: #f1f2f4;
+  --border-strong: #d1d5db;
+
+  /* Text */
+  --text-primary: #0f1114;
+  --text-secondary: #626772;
+  --text-tertiary: #9aa0aa;
+  --text-inverse: #ffffff;
+
+  /* Accent — used sparingly: active states, primary button only. */
+  --accent: #5e6ad2;
+  --accent-hover: #525cc7;
+  --accent-soft: #eef0ff;
+
+  /* Priority */
+  --prio-critical: #e5484d;
+  --prio-high: #f5a623;
+  --prio-medium: #3b82f6;
+  --prio-low: #8b8d98;
+
+  /* Status */
+  --status-open: #3b82f6;
+  --status-triaged: #8b5cf6;
+  --status-review: #f5a623;
+  --status-resolved: #30a46c;
+  --status-closed: #8b8d98;
+
+  /* Sidebar (dark chrome) */
+  --nav-bg: #0f1114;
+  --nav-bg-hover: #1a1d22;
+  --nav-bg-active: #232629;
+  --nav-text: #9aa0aa;
+  --nav-text-strong: #ffffff;
+  --nav-accent: #5e6ad2;
+
+  /* Typography */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-base: 13px; /* body */
+  --fs-md: 14px; /* section title, topbar title */
+  --fs-num: 22px; /* largest allowed number */
+
+  --lh-tight: 1.25;
+  --lh-body: 1.5;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  /* Radius */
+  --radius-input: 4px;
+  --radius-panel: 6px;
+  --radius-pill: 9999px;
+
+  /* Heights */
+  --h-topbar: 48px;
+  --h-toolbar: 40px;
+  --h-table-row: 36px;
+  --h-button: 28px;
+  --h-input: 28px;
+  --h-nav-item: 32px;
+  --w-sidebar: 220px;
+
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh-body);
+  color: var(--text-primary);
+  background: var(--bg-canvas);
+  font-feature-settings: "cv11", "ss01";
+
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  min-height: 100vh;
+  background: var(--bg-canvas);
+  color: var(--text-primary);
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
+  text-align: left;
 }
 
+/* Every heading renders the same 14px semibold. The spec rejects
+   decorative type scale; section titles must not exceed 14px. */
 h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+h2,
+h3,
+h4,
+h5 {
+  font-family: var(--font-sans);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: var(--lh-tight);
+  margin: 0;
+  letter-spacing: -0.005em;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
 p {
   margin: 0;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+a:hover {
+  text-decoration: underline;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.1s ease, border-color 0.1s ease, color 0.1s ease;
+}
+
+code,
+kbd,
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==================================================================
+ * Pill primitives — 11px, uppercase ONLY for real pills, radius 4px.
+ * Variant classes (-open / -triaged / ...) colour the background and
+ * text. Each pill stays on its own surface via a 50/600 desaturated
+ * pair — bg ≈ 6% opacity of the text colour.
+ * ================================================================== */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: 1;
+  border-radius: var(--radius-input);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  text-transform: capitalize;
+}
+
+.pill-open { background: #e8f0ff; color: #1e4fb8; }
+.pill-triaged { background: #f0e9ff; color: #6b3fbe; }
+.pill-review { background: #fff0d6; color: #9a5a00; }
+.pill-resolved { background: #daf4e6; color: #1a6b42; }
+.pill-closed { background: #ececee; color: #4f545c; }
+
+.pill-cat-bug { background: #fde9e9; color: #b33b3f; }
+.pill-cat-feature { background: #e5eaff; color: #3b4ea5; }
+.pill-cat-support { background: #ecf1f5; color: #4f5763; }
+.pill-cat-requirement { background: #e8f4ee; color: #2a6b49; }
+.pill-cat-question { background: #fff4de; color: #8a6100; }
+.pill-cat-unknown { background: #f2f3f5; color: #6c707a; }
+
+/* Priority dot — colored 6px circle inline with label, no pill. */
+.prio-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-base);
+  color: var(--text-primary);
+}
+
+.prio-dot::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: currentColor;
+  color: var(--prio-medium);
+}
+
+.prio-critical { color: var(--prio-critical); }
+.prio-high { color: var(--prio-high); }
+.prio-medium { color: var(--prio-medium); }
+.prio-low { color: var(--prio-low); }
+
+/* prio-dot::before inherits the parent color via currentColor on the
+   label wrapper; override only when the row itself uses a different
+   text color. */
+.prio-dot.prio-critical::before { background: var(--prio-critical); }
+.prio-dot.prio-high::before { background: var(--prio-high); }
+.prio-dot.prio-medium::before { background: var(--prio-medium); }
+.prio-dot.prio-low::before { background: var(--prio-low); }
+
+/* Label keeps the neutral text color — only the dot gets the prio hue. */
+.prio-dot span {
+  color: var(--text-primary);
 }

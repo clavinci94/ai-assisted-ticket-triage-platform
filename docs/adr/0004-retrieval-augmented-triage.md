@@ -56,6 +56,15 @@ The retrieval backend is a small scikit-learn pipeline:
 - Cold start: if the corpus is smaller than `MIN_CORPUS_SIZE = 3`, the
   adapter returns an empty list and the decorator degrades to plain LLM
   classification.
+- **Similarity floor: `DEFAULT_MIN_SIMILARITY = 0.25`.** Matches below this
+  cosine threshold are dropped server-side. Empirically tuned on small
+  corpora — below ~0.25, TF-IDF 1–2-grams produce matches that share a
+  handful of incidental tokens but no real topical link, which clutters
+  the UI and erodes operator trust. Fewer-but-relevant beats three-but-noisy.
+- **UI score banding:** ≥ 50 % cosine is rendered green ("Starke
+  Übereinstimmung"), 25–49 % is amber ("Mittlere Übereinstimmung —
+  Orientierung"). The colour band is a visual honesty signal: the operator
+  can see at a glance whether the reference is decisive or just a hint.
 
 The fitted index lives in `app.state.similar_tickets` as a process-wide
 singleton. It is rebuilt on startup, and on demand via `POST

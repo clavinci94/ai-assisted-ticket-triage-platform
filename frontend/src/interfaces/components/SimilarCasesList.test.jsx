@@ -43,6 +43,18 @@ describe("SimilarCasesList", () => {
     expect(screen.getByText(/network-team/)).toBeInTheDocument();
   });
 
+  it("color-bands score badges: ≥50% as strong, below as moderate", () => {
+    renderWithRouter(<SimilarCasesList cases={SAMPLE} />);
+
+    const strongBadge = screen.getByText("85%");
+    expect(strongBadge.className).toMatch(/similar-case-score-strong/);
+    expect(strongBadge).toHaveAttribute("aria-label", expect.stringMatching(/Starke/));
+
+    const moderateBadge = screen.getByText("42%");
+    expect(moderateBadge.className).toMatch(/similar-case-score-moderate/);
+    expect(moderateBadge).toHaveAttribute("aria-label", expect.stringMatching(/Mittlere/));
+  });
+
   it("calls onNavigate with the ticket id when a row is clicked", async () => {
     const onNavigate = vi.fn();
     renderWithRouter(<SimilarCasesList cases={SAMPLE} onNavigate={onNavigate} />);

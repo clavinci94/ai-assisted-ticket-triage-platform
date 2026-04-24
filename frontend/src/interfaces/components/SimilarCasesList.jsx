@@ -8,7 +8,24 @@ import { useNavigate } from "react-router-dom";
  *
  * Designed to degrade gracefully: if no cases are passed in, the component
  * returns null — the caller never has to guard.
+ *
+ * Score badges are color-banded so operators can tell at a glance whether
+ * a reference is a strong match (green) or a weaker but still above-floor
+ * one (amber). The backend filter guarantees we never receive scores below
+ * the minimum-similarity threshold.
  */
+const STRONG_MATCH_THRESHOLD = 0.5;
+
+function scoreTone(score) {
+  return score >= STRONG_MATCH_THRESHOLD ? "strong" : "moderate";
+}
+
+function scoreLabel(tone) {
+  return tone === "strong"
+    ? "Starke Übereinstimmung"
+    : "Mittlere Übereinstimmung — als Orientierung";
+}
+
 export default function SimilarCasesList({ cases, onNavigate }) {
   const navigate = useNavigate();
 
@@ -33,30 +50,38 @@ export default function SimilarCasesList({ cases, onNavigate }) {
         </span>
       </div>
       <ul className="similar-cases-list">
-        {cases.map((item) => (
-          <li key={item.ticket_id}>
-            <button
-              type="button"
-              className="similar-case-row"
-              onClick={() => handleOpen(item.ticket_id)}
-              title={`Zum Ticket ${item.ticket_id} wechseln`}
-            >
-              <span className="similar-case-score">
-                {Math.round((item.similarity_score || 0) * 100)}%
-              </span>
-              <span className="similar-case-body">
-                <span className="similar-case-title">
-                  #{item.ticket_id} · {item.title}
+        {cases.map((item) => {
+          const score = item.similarity_score || 0;
+          const tone = scoreTone(score);
+          return (
+            <li key={item.ticket_id}>
+              <button
+                type="button"
+                className="similar-case-row"
+                onClick={() => handleOpen(item.ticket_id)}
+                title={`Zum Ticket ${item.ticket_id} wechseln`}
+              >
+                <span
+                  className={`similar-case-score similar-case-score-${tone}`}
+                  title={scoreLabel(tone)}
+                  aria-label={scoreLabel(tone)}
+                >
+                  {Math.round(score * 100)}%
                 </span>
-                <span className="similar-case-meta">
-                  <span>{item.final_department}</span>
-                  {item.final_team ? <span>· {item.final_team}</span> : null}
-                  <span>· {item.final_category}</span>
+                <span className="similar-case-body">
+                  <span className="similar-case-title">
+                    #{item.ticket_id} · {item.title}
+                  </span>
+                  <span className="similar-case-meta">
+                    <span>{item.final_department}</span>
+                    {item.final_team ? <span>· {item.final_team}</span> : null}
+                    <span>· {item.final_category}</span>
+                  </span>
                 </span>
-              </span>
-            </button>
-          </li>
-        ))}
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

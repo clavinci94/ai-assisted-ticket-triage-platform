@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import ReportsTabs from "../components/ReportsTabs";
 import { useToast } from "../components/ToastProvider";
 import SectionCard from "../components/SectionCard";
 import { fetchDashboardAnalytics, fetchTickets } from "../../infrastructure/http/api";
@@ -162,6 +163,7 @@ export default function DashboardKpisPage() {
 
   return (
     <div className="app-shell dashboard-shell">
+      <ReportsTabs />
       <section className="dashboard-hero">
         <div className="dashboard-hero-copy">
           <p className="eyebrow">Reporting</p>

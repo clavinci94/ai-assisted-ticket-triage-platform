@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarChart, Bar, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import ReportsTabs from "../components/ReportsTabs";
 import { useToast } from "../components/ToastProvider";
 import { DEPARTMENTS, normalizeDepartment } from "../../domain/constants/departments";
 import { fetchDashboardAnalytics, fetchTickets } from "../../infrastructure/http/api";
@@ -108,6 +109,7 @@ export default function DashboardDepartmentsPage() {
 
   return (
     <div className="app-shell dashboard-shell">
+      <ReportsTabs />
       <header className="dashboard-hero">
         <div className="dashboard-hero-copy">
           <p className="eyebrow">Reporting</p>

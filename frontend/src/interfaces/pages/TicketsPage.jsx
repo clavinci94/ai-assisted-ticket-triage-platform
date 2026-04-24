@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import TicketList from "../components/TicketList";
-import TicketFilters from "../components/TicketFilters";
-import FilterChips from "../components/FilterChips";
+import TicketsTabs from "../components/TicketsTabs";
 import BulkActionsBar from "../components/BulkActionsBar";
 import PaginationControls from "../components/PaginationControls";
+import { useSetPageHeading } from "../components/PageHeadingContext";
 import { useToast } from "../components/ToastProvider";
 import { fetchTicketWorkbench } from "../../infrastructure/http/api";
 import {
@@ -60,8 +60,8 @@ export default function TicketsPage({ initialView = "all" }) {
   const [workbenchData, setWorkbenchData] = useState(DEFAULT_LIST_RESPONSE);
   const [loading, setLoading] = useState(false);
   const [selectedTicketIds, setSelectedTicketIds] = useState([]);
-  const [savedViews, setSavedViews] = useState(() => loadStoredJson(SAVED_VIEWS_STORAGE_KEY, []));
-  const [visibleColumns, setVisibleColumns] = useState(() => {
+  const [savedViews] = useState(() => loadStoredJson(SAVED_VIEWS_STORAGE_KEY, []));
+  const [visibleColumns] = useState(() => {
     const storedColumns = loadStoredJson(COLUMN_VISIBILITY_STORAGE_KEY, DEFAULT_VISIBLE_COLUMNS);
     return Array.isArray(storedColumns) && storedColumns.length ? storedColumns : DEFAULT_VISIBLE_COLUMNS;
   });
@@ -176,35 +176,8 @@ export default function TicketsPage({ initialView = "all" }) {
     });
   }
 
-  function handleViewChange(viewKey) {
-    navigate(getWorkbenchView(viewKey).path);
-  }
-
   function handleResetFilters() {
     setSearchParams(new URLSearchParams(), { replace: true });
-  }
-
-  function handleRemoveChip(key) {
-    const defaults = buildDefaultWorkbenchFilters();
-    updateSearchParams({ [key]: defaults[key] ?? "" });
-  }
-
-  function handleToggleColumn(columnKey) {
-    setVisibleColumns((currentColumns) => {
-      if (currentColumns.includes(columnKey)) {
-        if (currentColumns.length === 1) {
-          return currentColumns;
-        }
-
-        return currentColumns.filter((value) => value !== columnKey);
-      }
-
-      const ordered = COLUMN_OPTIONS
-        .map((column) => column.key)
-        .filter((key) => key === columnKey || currentColumns.includes(key));
-
-      return ordered;
-    });
   }
 
   function handlePageChange(nextPage) {
@@ -264,116 +237,95 @@ export default function TicketsPage({ initialView = "all" }) {
     navigate(`/tickets/${selectedTicketIds[0]}`);
   }
 
-  function handleSaveCurrentView() {
-    const label = window.prompt("Name für diese Sicht");
+  const facets = workbenchData.facets || EMPTY_FACETS;
+  const statusOptions = facets.statuses || [];
+  const priorityOptions = facets.priorities || [];
+  const departmentOptions = facets.departments || [];
+  const sourceOptions = facets.sources || [];
 
-    if (!label) {
-      return;
-    }
-
-    const savedView = {
-      id: `view-${Date.now()}`,
-      label,
-      view: activeView.key,
-      filters,
-    };
-
-    setSavedViews((currentViews) => [...currentViews, savedView]);
-    showToast({
-      type: "success",
-      title: "Sicht gespeichert",
-      message: `Die Sicht "${label}" steht jetzt in deiner Workbench zur Verfügung.`,
-    });
-  }
-
-  function handleApplyCustomView(viewId) {
-    const viewConfig = savedViews.find((item) => item.id === viewId);
-
-    if (!viewConfig) {
-      return;
-    }
-
-    const nextParams = new URLSearchParams();
-
-    Object.entries(viewConfig.filters).forEach(([key, value]) => {
-      if (!value || value === "all") {
-        return;
-      }
-      nextParams.set(key, String(value));
-    });
-
-    navigate(`${getWorkbenchView(viewConfig.view).path}?${nextParams.toString()}`);
-  }
+  useSetPageHeading("Tickets", workbenchData.total || null);
 
   return (
-    <div className="app-shell dashboard-shell">
-      <section className="dashboard-hero">
-        <div className="dashboard-hero-copy">
-          <p className="eyebrow">Ticket-Workbench</p>
-          <h1>{activeView.label}</h1>
-          <p className="subtitle">{activeView.description}</p>
-          <div className="hero-guide">
-            <p>
-              Diese Seite bündelt Suche, Mehrfachfilter, gespeicherte Sichten, Pagination und Bulk-Aktionen in einer
-              echten Arbeitsansicht für den operativen Ticketbestand.
-            </p>
-          </div>
+    <div className="app-shell workbench-shell">
+      <div className="workbench-toolbar">
+        <TicketsTabs />
+
+        <div className="workbench-filters">
+          <label className="filter-chip">
+            <span>Status</span>
+            <select
+              value={filters.status}
+              onChange={(event) => handleFilterChange("status", event.target.value)}
+            >
+              <option value="all">Alle</option>
+              {statusOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="filter-chip">
+            <span>Priorität</span>
+            <select
+              value={filters.priority}
+              onChange={(event) => handleFilterChange("priority", event.target.value)}
+            >
+              <option value="all">Alle</option>
+              {priorityOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="filter-chip">
+            <span>Abteilung</span>
+            <select
+              value={filters.department}
+              onChange={(event) => handleFilterChange("department", event.target.value)}
+            >
+              <option value="all">Alle</option>
+              {departmentOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="filter-chip">
+            <span>Quelle</span>
+            <select
+              value={filters.source}
+              onChange={(event) => handleFilterChange("source", event.target.value)}
+            >
+              <option value="all">Alle</option>
+              {sourceOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {activeChips.length > 0 ? (
+            <button type="button" className="workbench-reset" onClick={handleResetFilters}>
+              Zurücksetzen
+            </button>
+          ) : null}
         </div>
+      </div>
 
-        <div className="hero-summary-card">
-          <span className="hero-summary-label">Treffer in Sicht</span>
-          <strong className="hero-summary-value">{workbenchData.total}</strong>
-          <span className="hero-summary-text">Aktuelle Anzahl Tickets in der gewählten Workbench-Ansicht</span>
-        </div>
-      </section>
+      {selectedTicketIds.length > 0 ? (
+        <BulkActionsBar
+          selectedCount={selectedTicketIds.length}
+          onCopyIds={handleCopyIds}
+          onOpenFirst={handleOpenFirstSelected}
+          onClearSelection={() => setSelectedTicketIds([])}
+        />
+      ) : null}
 
-      <section className="dashboard-pathbar">
-        <div className="dashboard-breadcrumbs">
-          <span>Tickets</span>
-          <span>•</span>
-          <span>{activeView.label}</span>
-        </div>
-        <div className="dashboard-actions">
-          <button type="button" onClick={() => navigate("/dashboard")}>Dashboard</button>
-          <button type="button" onClick={() => navigate("/dashboard/create")}>Ticket erfassen</button>
-          <button type="button" onClick={() => navigate("/dashboard/kpis")}>KPIs</button>
-        </div>
-      </section>
-
-      <TicketFilters
-        activeView={activeView.key}
-        viewOptions={Object.values(WORKBENCH_VIEWS)}
-        customViews={savedViews}
-        filters={filters}
-        facets={workbenchData.facets || EMPTY_FACETS}
-        columns={COLUMN_OPTIONS}
-        visibleColumns={visibleColumns}
-        onViewChange={handleViewChange}
-        onApplyCustomView={handleApplyCustomView}
-        onSaveCurrentView={handleSaveCurrentView}
-        onFilterChange={handleFilterChange}
-        onResetFilters={handleResetFilters}
-        onToggleColumn={handleToggleColumn}
-      />
-
-      <FilterChips chips={activeChips} onRemove={handleRemoveChip} onClear={handleResetFilters} />
-
-      <BulkActionsBar
-        selectedCount={selectedTicketIds.length}
-        onCopyIds={handleCopyIds}
-        onOpenFirst={handleOpenFirstSelected}
-        onClearSelection={() => setSelectedTicketIds([])}
-      />
-
-      <section className="workbench-table-card">
-        <div className="workbench-table-header">
-          <div>
-            <span className="workbench-table-eyebrow">Operative Tabelle</span>
-            <h2>{activeView.label}</h2>
-            <p>Sortiere nach Spalten, markiere Zeilen und arbeite mit gespeicherten oder freien Filterkombinationen.</p>
-          </div>
-        </div>
-
+      <div className="workbench-table-wrap">
         <TicketList
           variant="table"
           tickets={workbenchData.items}
@@ -386,16 +338,16 @@ export default function TicketsPage({ initialView = "all" }) {
           sortBy={filters.sort_by}
           sortDir={filters.sort_dir}
         />
+      </div>
 
-        <PaginationControls
-          page={workbenchData.page}
-          totalPages={workbenchData.total_pages}
-          total={workbenchData.total}
-          pageSize={workbenchData.page_size}
-          onPageChange={handlePageChange}
-          onPageSizeChange={handlePageSizeChange}
-        />
-      </section>
+      <PaginationControls
+        page={workbenchData.page}
+        totalPages={workbenchData.total_pages}
+        total={workbenchData.total}
+        pageSize={workbenchData.page_size}
+        onPageChange={handlePageChange}
+        onPageSizeChange={handlePageSizeChange}
+      />
     </div>
   );
 }
