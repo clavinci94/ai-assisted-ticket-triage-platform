@@ -34,11 +34,16 @@ test.describe('API contract', () => {
 // ---------- UI smoke ----------
 
 test.describe('Web UI', () => {
-  test('landing page loads and shows navigation to the dashboard', async ({ page }) => {
+  test('root redirects to the dashboard and shows the 4 top-level nav items', async ({ page }) => {
     await page.goto('/')
-    // The app's sidebar lists navigation labels in German.
-    await expect(page.getByRole('link', { name: 'Übersicht' })).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Alle Tickets' })).toBeVisible()
+    // After the IA restructure the sidebar holds four flat destinations.
+    // Sub-views (Alle / Meine / Offen / Eskalationen) moved inside the
+    // Tickets page as tabs; the top-level Tickets link is what remains.
+    const nav = page.getByRole('navigation', { name: 'Hauptnavigation' })
+    await expect(nav.getByRole('link', { name: 'Übersicht' })).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Tickets' })).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Reports' })).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Einstellungen' })).toBeVisible()
   })
 
   test('navigating to the tickets page shows a tickets heading or empty state', async ({ page }) => {
