@@ -29,12 +29,15 @@ importieren. Die Kommunikation mit der Außenwelt läuft ausschließlich über d
 `app/application/ports/`.
 
 **Entitäten** (mind. 5, siehe `app/domain/entities/`):
-`Ticket`, `TicketEvent`, `Assignment`, `TriageAnalysis`, `TriageDecision`.
+`Ticket`, `TicketEvent`, `Assignment`, `TriageAnalysis`, `TriageDecision`, `SimilarCase`.
 
 **Use-Case-Services** (siehe `app/application/use_cases/`): `create_ticket`, `triage_ticket`,
 `save_triage_decision`, `assign_ticket`, `update_ticket_status`, `escalate_ticket`,
 `add_ticket_comment`, `list_tickets`, `get_ticket`, `get_dashboard_analytics`,
 `retrain_model`, `review_triage_decision`.
+
+**Ports** (siehe `app/application/ports/`): `ClassifierPort`, `TicketRepositoryPort`,
+`SimilarTicketsPort`.
 
 ---
 
@@ -73,14 +76,34 @@ Return valid JSON only.
 
 Der vollständige Prompt samt User-Message steht in `litellm_classifier.py::analyze()`.
 
-### 2.2 Trainings-Agent: scikit-learn Pipeline
+### 2.2 Retrieval-Agent: RagAssistedClassifier
+
+- **Code**: `app/infrastructure/ai/rag_assisted_classifier.py` (Decorator)
+  plus `app/infrastructure/ai/tfidf_similar_tickets.py` (Retrieval-Adapter)
+- **Zweck**: Reichert jede LLM-Antwort mit den drei ähnlichsten, von Operatoren
+  bereits reviewten Tickets an. Der LLM bekommt diese Fälle als zusätzlichen
+  System-Kontext, die UI zeigt sie als klickbare Referenzen im Preview-Popup.
+- **Port**: `app.application.ports.similar_tickets_port.SimilarTicketsPort`
+- **Technik**: scikit-learn `TfidfVectorizer(ngram_range=(1, 2))` + cosine
+  `NearestNeighbors`. Der Index wird beim App-Start aus der Datenbank aufgebaut
+  (Filter: `reviewed_by IS NOT NULL`) und lebt als Singleton in `app.state`.
+- **Rebuild**: `POST /admin/rebuild-rag` oder Neustart.
+- **Cold Start**: Unter `MIN_CORPUS_SIZE=3` reviewten Tickets liefert der Adapter
+  leer zurück; der Decorator delegiert dann an den LLM ohne RAG-Kontext.
+- **Fehlertoleranz**: Retrieval-Fehler werden im Decorator abgefangen — die
+  Triage-Pipeline fällt auf plain-LLM-Klassifikation zurück statt zu kippen.
+- **ADR**: [docs/adr/0004-retrieval-augmented-triage.md](./docs/adr/0004-retrieval-augmented-triage.md)
+  erklärt die Entscheidung und die verworfenen Alternativen (embeddings,
+  pgvector, Tool-using Agent).
+
+### 2.3 Trainings-Agent: scikit-learn Pipeline
 
 - **Code**: `app/infrastructure/ai/train_model.py`
 - **Input**: `data/issues.csv` (Spalten `title`, `body`, `label`)
 - **Output**: `app/infrastructure/ai/models/triage_model.pkl` (TF-IDF + Multinomial NB)
 - **Use Case**: `app/application/use_cases/retrain_model.py`, Endpoint `POST /admin/retrain`
 
-### 2.3 Coding-Agent: Claude (Cowork / Claude Code)
+### 2.4 Coding-Agent: Claude (Cowork / Claude Code)
 
 Für Implementierungsarbeit, Refactorings und Tests wird ein KI-Coding-Agent aktiv genutzt.
 Leitplanken:
@@ -104,6 +127,7 @@ Leitplanken:
 | Datenbank | SQLite (lokal), PostgreSQL (Render) | `render.yaml`, `app/infrastructure/persistence/db.py` |
 | LLM-Gateway | LiteLLM / OpenAI-SDK | `app/infrastructure/ai/litellm_classifier.py` |
 | Klassisches ML | scikit-learn, joblib | `app/infrastructure/ai/ml_classifier.py`, `train_model.py` |
+| Retrieval (RAG) | scikit-learn `TfidfVectorizer` + `NearestNeighbors` | `app/infrastructure/ai/tfidf_similar_tickets.py`, `rag_assisted_classifier.py` |
 | Frontend | React 19 + Vite + React Router + Axios + Recharts | `frontend/` |
 | Tests Backend | pytest, FastAPI `TestClient` | `tests/` |
 | Tests Frontend | Vitest + @testing-library/react | `frontend/src/**/*.test.jsx` |

@@ -1,13 +1,18 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.infrastructure.ai.tfidf_similar_tickets import TfidfSimilarTicketsAdapter
 from app.infrastructure.config.settings import get_settings
 from app.infrastructure.logging.setup import configure_logging
-from app.infrastructure.persistence.db import Base, engine, ensure_ticket_columns
+from app.infrastructure.persistence.db import Base, SessionLocal, engine, ensure_ticket_columns
 from app.interfaces.api.middleware import ApiKeyMiddleware, RequestContextMiddleware
 from app.interfaces.api.routes.admin import router as admin_router
 from app.interfaces.api.routes.system import router as system_router
 from app.interfaces.api.routes.tickets import router as tickets_router
+
+logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
@@ -42,6 +47,18 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Retrieval singleton: build the TF-IDF index once at startup against
+    # whatever reviewed tickets exist in the DB. The admin endpoint
+    # /admin/rebuild-rag lets operators refresh it on demand after bulk
+    # reviews; startup build is a best-effort that tolerates empty corpora.
+    similar_tickets = TfidfSimilarTicketsAdapter(SessionLocal)
+    try:
+        corpus_size = similar_tickets.rebuild()
+        logger.info("RAG index ready — %d reviewed tickets available", corpus_size)
+    except Exception:
+        logger.exception("initial RAG index build failed — continuing without retrieval context")
+    application.state.similar_tickets = similar_tickets
 
     application.include_router(system_router)
     application.include_router(tickets_router)

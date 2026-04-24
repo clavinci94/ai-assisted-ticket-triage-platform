@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../components/ToastProvider";
 import SectionCard from "../components/SectionCard";
+import SimilarCasesList from "../components/SimilarCasesList";
 import { DEPARTMENTS } from "../../domain/constants/departments";
 import { previewTriageTicket, triageTicket } from "../../infrastructure/http/api";
 
@@ -319,6 +320,14 @@ export default function DashboardCreatePage() {
               <span>Priorität: {previewAnalysis.predicted_priority}</span>
               <span>Team: {previewAnalysis.suggested_team}</span>
             </div>
+
+            <SimilarCasesList
+              cases={previewAnalysis.similar_cases}
+              onNavigate={(ticketId) => {
+                setShowRecommendationModal(false);
+                navigate(`/tickets/${ticketId}`);
+              }}
+            />
 
             {manualDepartmentMode ? (
               <label className="modal-select-label">

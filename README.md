@@ -27,6 +27,7 @@ See [CHANGES.md](./CHANGES.md) for detailed technical breakdown.
 ## Highlights
 
 - AI-assisted ticket intake with preview before persistence
+- **Retrieval-augmented triage** — every LLM recommendation is grounded in the top-3 most similar previously-reviewed tickets, shown clickably in the UI (see [ADR 0004](./docs/adr/0004-retrieval-augmented-triage.md))
 - Department recommendation with accept-or-override popup
 - Ticket workbench with table views, filters, chips, pagination, and bulk actions
 - Ticket detail workflow for review, assignment, status changes, escalation, and comments
@@ -41,6 +42,7 @@ See [CHANGES.md](./CHANGES.md) for detailed technical breakdown.
 - Create new tickets from the dashboard
 - Generate an AI recommendation before saving
 - Show suggested department and rationale in a popup
+- **Show the top-3 most similar historical tickets under each recommendation**, with their human-confirmed routing, so operators see *why* the AI is suggesting what it suggests
 - Let the user accept the recommendation or override the department manually
 
 ### Operational Workbench
@@ -78,7 +80,7 @@ See [CHANGES.md](./CHANGES.md) for detailed technical breakdown.
 - FastAPI
 - SQLAlchemy
 - Pydantic
-- scikit-learn
+- scikit-learn (TF-IDF + NearestNeighbors for the retrieval-augmented triage layer)
 - LiteLLM
 - python-dotenv
 
@@ -133,7 +135,7 @@ See [CHANGES.md](./CHANGES.md) for detailed technical breakdown.
 │   └── playwright.config.js
 ├── .github/workflows        # CI, Release, CD pipelines
 ├── AGENTS.md                # agent & tool documentation
-├── docs/adr/                # architecture decision records
+├── docs/adr/                # architecture decision records (incl. 0004 RAG)
 ├── Dockerfile               # multi-stage image (frontend + backend)
 ├── pyproject.toml           # pytest / ruff / coverage / bandit config
 ├── .pre-commit-config.yaml  # lint & security hooks for local commits
@@ -249,6 +251,7 @@ See [`docs/adr/`](./docs/adr/) for the decisions behind this layering (Architect
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | `POST` | `/admin/retrain` | Retrain the classic ML model |
+| `POST` | `/admin/rebuild-rag` | Refit the retrieval index from the current reviewed-ticket corpus |
 | `GET` | `/health` | Liveness probe (no dependencies) |
 | `GET` | `/ready` | Readiness probe (verifies DB connectivity) |
 
@@ -486,6 +489,57 @@ Published images (on tagged releases): `ghcr.io/clavinci94/ai-assisted-ticket-tr
 ```bash
 docker pull ghcr.io/clavinci94/ai-assisted-ticket-triage-platform:latest
 ```
+
+## Retrieval-Augmented Triage (RAG)
+
+Every LLM recommendation is enriched with the **three most similar past
+tickets that a human reviewer has confirmed**. The UI shows them as
+clickable references under the AI's suggested department, so the operator
+sees concrete precedent — not just prose — for the routing decision.
+
+### How it works
+
+```
+new ticket
+   │
+   ▼
+RagAssistedClassifier      (decorator, app/infrastructure/ai/rag_assisted_classifier.py)
+   │  ├── SimilarTicketsPort   (→ TfidfSimilarTicketsAdapter — scikit-learn)
+   │  │     └── picks top-3 reviewed tickets, ranked by cosine similarity
+   │  │
+   │  └── inner ClassifierPort (→ LitellmClassifier, with the retrieved
+   │        examples injected as an extra system message before the prompt)
+   │
+   ▼
+TriageAnalysis (with similar_cases populated and returned to the UI)
+```
+
+### Corpus
+
+Only tickets with `reviewed_by IS NOT NULL` count — meaning the retrieval
+layer learns **exclusively from human-confirmed routing decisions**, never
+from historical AI guesses.
+
+### Demo data
+
+For an empty database, seed ~20 realistic reviewed tickets:
+
+```bash
+.venv/bin/python scripts/seed_demo_tickets.py            # add, skip duplicates
+.venv/bin/python scripts/seed_demo_tickets.py --replace  # wipe DEMO-* first
+```
+
+Then rebuild the retrieval index so newly seeded tickets are picked up
+without restarting the server:
+
+```bash
+curl -X POST http://127.0.0.1:8000/admin/rebuild-rag
+```
+
+### Rationale
+
+Full context and the rejected alternatives (sentence-transformers,
+pgvector, agent loops) are in [ADR 0004](./docs/adr/0004-retrieval-augmented-triage.md).
 
 ### SQLite to Render/Postgres Migration
 

@@ -21,6 +21,15 @@ class TicketCreateRequest(BaseModel):
     department_locked: bool = False
 
 
+class SimilarCaseResponse(BaseModel):
+    ticket_id: str
+    title: str
+    final_department: str
+    final_category: str
+    final_team: str | None = None
+    similarity_score: float
+
+
 class TriageAnalysisResponse(BaseModel):
     predicted_category: str
     category_confidence: float
@@ -33,6 +42,7 @@ class TriageAnalysisResponse(BaseModel):
     rationale: str
     model_version: str
     analyzed_at: datetime | None = None
+    similar_cases: list[SimilarCaseResponse] = Field(default_factory=list)
 
 
 class TriageResponse(BaseModel):

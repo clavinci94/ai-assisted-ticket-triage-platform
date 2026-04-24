@@ -9,6 +9,7 @@ Superseded decisions stay in the list with status `Superseded by ADR N`.
 | [0001](./0001-clean-architecture.md) | Clean Architecture with Domain / Application / Infrastructure / Interfaces | Accepted |
 | [0002](./0002-litellm-for-triage.md) | LiteLLM proxy for AI-assisted triage | Accepted |
 | [0003](./0003-test-pyramid.md) | Three-layer test pyramid (unit / integration / E2E) | Accepted |
+| [0004](./0004-retrieval-augmented-triage.md) | Retrieval-augmented triage via TF-IDF decorator | Accepted |
 
 ## Writing a new ADR
 

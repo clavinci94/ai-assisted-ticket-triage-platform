@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from app.domain.entities.similar_case import SimilarCase
 from app.domain.enums.ticket_category import TicketCategory
 from app.domain.enums.ticket_priority import TicketPriority
 
@@ -18,3 +19,4 @@ class TriageAnalysis:
     rationale: str
     model_version: str
     analyzed_at: datetime | None = field(default_factory=datetime.utcnow)
+    similar_cases: list[SimilarCase] = field(default_factory=list)

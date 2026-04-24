@@ -9,6 +9,7 @@ from app.domain.constants.departments import (
     infer_department_from_text,
     normalize_department,
 )
+from app.domain.entities.similar_case import SimilarCase
 from app.domain.entities.ticket import Ticket
 from app.domain.entities.triage_analysis import TriageAnalysis
 from app.domain.enums.ticket_category import TicketCategory
@@ -74,8 +75,12 @@ class LitellmClassifier(ClassifierPort):
                     "No Azure AI endpoint found. Set AZURE_API_BASE, AZURE_AI_API_BASE, LITELLM_API_BASE, or OPENAI_BASE_URL to use azure_ai models."
                 )
 
-    def analyze(self, ticket: Ticket) -> TriageAnalysis:
-        messages = [
+    def analyze(
+        self,
+        ticket: Ticket,
+        similar_cases: list[SimilarCase] | None = None,
+    ) -> TriageAnalysis:
+        messages: list[dict[str, str]] = [
             {
                 "role": "system",
                 "content": (
@@ -89,7 +94,18 @@ class LitellmClassifier(ClassifierPort):
                     "Write summary, next_step, and rationale in German. Keep each of them concise and limited to one short sentence. "
                     "Return valid JSON only, without any additional explanation."
                 ),
-            },
+            }
+        ]
+
+        if similar_cases:
+            messages.append(
+                {
+                    "role": "system",
+                    "content": self._build_similar_cases_context(similar_cases),
+                }
+            )
+
+        messages.append(
             {
                 "role": "user",
                 "content": (
@@ -102,8 +118,8 @@ class LitellmClassifier(ClassifierPort):
                     f"Due date: {ticket.due_at or 'not provided'}\n"
                     f"Tags: {', '.join(ticket.tags) if ticket.tags else 'not provided'}"
                 ),
-            },
-        ]
+            }
+        )
 
         if self.use_proxy:
             client = OpenAI(
@@ -158,9 +174,31 @@ class LitellmClassifier(ClassifierPort):
             suggested_department=suggested_department,
             next_step=next_step,
             rationale=rationale,
-            model_version=f"litellm-{self.model_name}",
+            model_version=self._model_version(similar_cases),
             analyzed_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            similar_cases=list(similar_cases or []),
         )
+
+    def _model_version(self, similar_cases: list[SimilarCase] | None) -> str:
+        suffix = "+rag" if similar_cases else ""
+        return f"litellm-{self.model_name}{suffix}"
+
+    @staticmethod
+    def _build_similar_cases_context(cases: list[SimilarCase]) -> str:
+        """Format historical routing decisions as a compact reference block."""
+        lines = ["Ähnliche, vom Operator bestätigte Fälle aus der Vergangenheit:"]
+        for case in cases:
+            team_part = f", team={case.final_team}" if case.final_team else ""
+            lines.append(
+                f"- #{case.ticket_id} »{case.title}« → department={case.final_department}, "
+                f"category={case.final_category}{team_part} "
+                f"(Ähnlichkeit {case.similarity_score:.0%})"
+            )
+        lines.append(
+            "Nutze diese Fälle als Referenz, wenn das aktuelle Ticket thematisch passt. "
+            "Widerspreche dem Muster nur, wenn das aktuelle Ticket klar abweicht."
+        )
+        return "\n".join(lines)
 
     def _extract_text(self, response: object) -> str:
         if response is None:

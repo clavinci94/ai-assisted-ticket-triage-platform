@@ -2,6 +2,7 @@ from datetime import datetime
 
 from app.application.ports.classifier_port import ClassifierPort
 from app.domain.constants.departments import infer_department_from_text
+from app.domain.entities.similar_case import SimilarCase
 from app.domain.entities.ticket import Ticket
 from app.domain.entities.triage_analysis import TriageAnalysis
 from app.domain.enums.ticket_category import TicketCategory
@@ -9,7 +10,11 @@ from app.domain.enums.ticket_priority import TicketPriority
 
 
 class BaselineClassifier(ClassifierPort):
-    def analyze(self, ticket: Ticket) -> TriageAnalysis:
+    def analyze(
+        self,
+        ticket: Ticket,
+        similar_cases: list[SimilarCase] | None = None,  # noqa: ARG002 — retrieval context not used by baseline heuristic
+    ) -> TriageAnalysis:
         context_parts = [
             ticket.title,
             ticket.description,

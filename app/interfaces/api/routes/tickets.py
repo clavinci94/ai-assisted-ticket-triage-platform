@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.application.ports.similar_tickets_port import SimilarTicketsPort
 from app.application.use_cases.add_ticket_comment import AddTicketCommentUseCase
 from app.application.use_cases.assign_ticket import AssignTicketUseCase
 from app.application.use_cases.escalate_ticket import EscalateTicketUseCase
@@ -18,11 +19,17 @@ from app.application.use_cases.update_ticket_status import UpdateTicketStatusUse
 from app.domain.entities.assignment import Assignment
 from app.domain.enums.ticket_status import TicketStatus
 from app.infrastructure.ai.ml_classifier import MLClassifier
+from app.infrastructure.ai.rag_assisted_classifier import RagAssistedClassifier
 from app.infrastructure.persistence.sqlite_ticket_repository import SQLiteTicketRepository
-from app.interfaces.api.dependencies import get_db_session, get_ticket_repository
+from app.interfaces.api.dependencies import (
+    get_db_session,
+    get_similar_tickets,
+    get_ticket_repository,
+)
 from app.interfaces.api.mappers.ticket_mapper import to_domain_ticket
 from app.interfaces.api.schemas.ticket_schemas import (
     DashboardAnalyticsResponse,
+    SimilarCaseResponse,
     TicketAssignmentRequest,
     TicketAssignmentResponse,
     TicketCommentRequest,
@@ -58,6 +65,17 @@ def _to_analysis_response(analysis) -> TriageAnalysisResponse:
         rationale=analysis.rationale,
         model_version=analysis.model_version,
         analyzed_at=analysis.analyzed_at,
+        similar_cases=[
+            SimilarCaseResponse(
+                ticket_id=case.ticket_id,
+                title=case.title,
+                final_department=case.final_department,
+                final_category=case.final_category,
+                final_team=case.final_team,
+                similarity_score=case.similarity_score,
+            )
+            for case in getattr(analysis, "similar_cases", []) or []
+        ],
     )
 
 
@@ -390,6 +408,17 @@ def repository_dependency(
 
 
 TicketRepositoryDep = Annotated[SQLiteTicketRepository, Depends(repository_dependency)]
+SimilarTicketsDep = Annotated[SimilarTicketsPort, Depends(get_similar_tickets)]
+
+
+def _build_rag_classifier(similar_tickets: SimilarTicketsPort) -> RagAssistedClassifier:
+    """Construct the RAG-decorated LiteLLM classifier used by both LLM routes."""
+    from app.infrastructure.ai.litellm_classifier import LitellmClassifier
+
+    return RagAssistedClassifier(
+        inner=LitellmClassifier(),
+        similar_tickets=similar_tickets,
+    )
 
 
 @router.post("/triage", response_model=TriageResponse)
@@ -419,14 +448,13 @@ def triage_ticket(
 def triage_ticket_with_llm(
     request: TicketCreateRequest,
     repository: TicketRepositoryDep,
+    similar_tickets: SimilarTicketsDep,
 ) -> TriageResponse:
     ticket = to_domain_ticket(request)
 
     try:
-        from app.infrastructure.ai.litellm_classifier import LitellmClassifier
-
         use_case = TriageTicketUseCase(
-            classifier=LitellmClassifier(),
+            classifier=_build_rag_classifier(similar_tickets),
             repository=repository,
         )
         result = use_case.execute(ticket)
@@ -446,13 +474,12 @@ def triage_ticket_with_llm(
 @router.post("/triage/llm/preview", response_model=TriageAnalysisResponse)
 def preview_ticket_with_llm(
     request: TicketCreateRequest,
+    similar_tickets: SimilarTicketsDep,
 ) -> TriageAnalysisResponse:
     ticket = to_domain_ticket(request)
 
     try:
-        from app.infrastructure.ai.litellm_classifier import LitellmClassifier
-
-        analysis = LitellmClassifier().analyze(ticket)
+        analysis = _build_rag_classifier(similar_tickets).analyze(ticket)
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error)) from error
 

@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from app.application.ports.classifier_port import ClassifierPort
 from app.domain.constants.departments import infer_department_from_text
+from app.domain.entities.similar_case import SimilarCase
 from app.domain.entities.ticket import Ticket
 from app.domain.entities.triage_analysis import TriageAnalysis
 from app.domain.enums.ticket_category import TicketCategory
@@ -14,7 +15,11 @@ class MLClassifier(ClassifierPort):
         self.model = load_model()
         self.model_version = model_version
 
-    def analyze(self, ticket: Ticket) -> TriageAnalysis:
+    def analyze(
+        self,
+        ticket: Ticket,
+        similar_cases: list[SimilarCase] | None = None,  # noqa: ARG002 — retrieval context not used by ML baseline
+    ) -> TriageAnalysis:
         if self.model is None:
             raise RuntimeError("ML-Modell nicht gefunden. Bitte trainiere das Modell zuerst.")
 
