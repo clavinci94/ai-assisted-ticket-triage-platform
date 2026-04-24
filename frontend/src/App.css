@@ -604,6 +604,100 @@ a {
   white-space: nowrap;
 }
 
+/* --------------------------------------------------------------------
+ * Critical list — two-line dense rows so cryptic titles
+ * (e.g. "WB-VIEWS-CLAUDIO Kritisch") can still be read at a glance.
+ * Reinforced with a thin red left stripe on the panel itself.
+ * -------------------------------------------------------------------- */
+.focus-panel-emphasis {
+  position: relative;
+}
+
+.focus-panel-emphasis::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--prio-critical);
+  border-radius: var(--radius-panel) 0 0 var(--radius-panel);
+}
+
+.critical-row {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.critical-row:last-child {
+  border-bottom: 0;
+}
+
+.critical-row-link {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) 64px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  color: var(--text-primary);
+  text-decoration: none;
+  min-height: 56px;
+}
+
+.critical-row-link:hover {
+  background: var(--bg-row-hover);
+  text-decoration: none;
+}
+
+.critical-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.critical-row-title {
+  font-size: var(--fs-base);
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.critical-row-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.critical-row-scope {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.critical-row-reporter {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+}
+
+.critical-row-time {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  text-align: right;
+  white-space: nowrap;
+}
+
 /* ====================================================================
  * Workbench (Tickets) — single toolbar, inline filter chips, dense table.
  * ==================================================================== */

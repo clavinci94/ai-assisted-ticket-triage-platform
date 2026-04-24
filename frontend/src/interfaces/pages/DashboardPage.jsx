@@ -52,6 +52,13 @@ function KpiTile({ label, value }) {
   );
 }
 
+function CategoryPill({ value }) {
+  const v = normalize(value);
+  const known = ["bug", "feature", "support", "requirement", "question"];
+  const key = known.includes(v) ? v : "unknown";
+  return <span className={`pill pill-cat-${key}`}>{value || "—"}</span>;
+}
+
 function FocusList({ title, items, emptyLabel }) {
   return (
     <section className="focus-panel">
@@ -80,6 +87,54 @@ function FocusList({ title, items, emptyLabel }) {
               </Link>
             </li>
           ))
+        )}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * Verdichtete, aber informationsreichere Zeilen für die Kritisch-Spalte:
+ * der Operator soll nicht nur den Titel sehen (der kann kryptisch sein wie
+ * "WB-VIEWS-CLAUDIO Kritisch"), sondern auf einen Blick auch Kategorie,
+ * Team/Abteilung und Reporter — damit er das Ticket einordnen kann
+ * ohne es zu öffnen.
+ */
+function CriticalList({ title, items, emptyLabel }) {
+  return (
+    <section className="focus-panel focus-panel-emphasis">
+      <header className="focus-panel-header">
+        <h2>{title}</h2>
+        <span className="focus-panel-count tabular-nums">{items.length}</span>
+      </header>
+      <ul className="focus-list">
+        {items.length === 0 ? (
+          <li className="focus-list-empty">{emptyLabel}</li>
+        ) : (
+          items.slice(0, 8).map((ticket) => {
+            const scope = ticket.team || ticket.department || "—";
+            return (
+              <li key={ticket.id} className="critical-row">
+                <Link to={`/tickets/${ticket.id}`} className="critical-row-link">
+                  <span
+                    className={`focus-row-dot prio-dot ${priorityClass(ticket.priority)}`}
+                    aria-hidden="true"
+                  />
+                  <div className="critical-row-body">
+                    <span className="critical-row-title">{ticket.title}</span>
+                    <span className="critical-row-meta">
+                      <CategoryPill value={ticket.category} />
+                      <span className="critical-row-scope">{scope}</span>
+                      <span className="critical-row-reporter">· {ticket.reporter || "—"}</span>
+                    </span>
+                  </div>
+                  <span className="critical-row-time tabular-nums">
+                    {formatRelative(ticket.created_at || ticket.updated_at)}
+                  </span>
+                </Link>
+              </li>
+            );
+          })
         )}
       </ul>
     </section>
@@ -156,7 +211,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="overview-focus-row">
-        <FocusList
+        <CriticalList
           title="Kritische Tickets"
           items={focusLists.critical}
           emptyLabel={loading ? "Wird geladen …" : "Keine kritischen Tickets."}
