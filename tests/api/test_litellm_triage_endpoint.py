@@ -212,6 +212,9 @@ def test_llm_triage_endpoint_uses_litellm_proxy(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("LITELLM_API_KEY", "dummy-proxy-key")
     monkeypatch.setenv("LITELLM_API_BASE", "http://127.0.0.1:4000")
+    # Pin the model so the test is independent of whatever CI / local env
+    # already exports for LITELLM_MODEL (CI sets it to "test-model").
+    monkeypatch.setenv("LITELLM_MODEL", "azure_ai/gpt-oss-120b")
 
     response = client.post("/tickets/triage/llm", json=payload)
 
