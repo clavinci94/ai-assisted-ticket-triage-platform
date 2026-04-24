@@ -150,41 +150,38 @@ See [CHANGES.md](./CHANGES.md) for detailed technical breakdown.
 
 ```mermaid
 flowchart LR
-    subgraph Interfaces["Interfaces (FastAPI + Pydantic)"]
-        Routes["routes/\n• tickets\n• admin\n• system"]
-        Schemas["schemas/"]
-        Middleware["middleware\nrequest-id · API key"]
+    UI["React / Vite<br/>frontend"]
+
+    subgraph Interfaces["Interfaces (FastAPI)"]
+        Routes["routes<br/>tickets, admin, system"]
+        Middleware["middleware<br/>request-id + API key"]
     end
 
-    subgraph Application["Application (use cases + ports)"]
-        UseCases["use_cases/\n• triage_ticket\n• assign_ticket\n• escalate_ticket\n• …"]
-        Ports["ports/\n• ClassifierPort\n• TicketRepository"]
-        DTOs["DTOs"]
+    subgraph Application["Application"]
+        UseCases["use cases<br/>triage, assign, escalate, ..."]
+        Ports["ports<br/>ClassifierPort, TicketRepositoryPort"]
     end
 
     subgraph Domain["Domain (pure Python)"]
-        Entities["entities/\nTicket · TicketEvent\nAssignment · TriageAnalysis\nTriageDecision"]
-        Rules["rules/\npriority_rules"]
-        Enums["enums/"]
+        Entities["entities<br/>Ticket, TicketEvent, Assignment,<br/>TriageAnalysis, TriageDecision"]
+        Rules["rules + enums"]
     end
 
     subgraph Infrastructure["Infrastructure (adapters)"]
-        Persistence["persistence/\nSQLAlchemy models\nSQLite · Postgres"]
-        AI["ai/\nLiteLLM · ML classifier"]
-        Logging["logging/\nJSON logs + request_id"]
+        Persistence["persistence<br/>SQLAlchemy + SQLite/Postgres"]
+        AI["ai<br/>LiteLLM + ML classifier"]
+        Logging["logging<br/>structured JSON + request_id"]
     end
 
-    UI["React / Vite\nfrontend/"]:::ui -->|HTTP + Axios| Routes
+    UI -->|HTTP| Routes
+    Middleware --> Routes
     Routes --> UseCases
-    Middleware -.-> Routes
     UseCases --> Ports
     UseCases --> Entities
-    Ports <-- implements --- Persistence
-    Ports <-- implements --- AI
-    Entities -.-> Rules
-    Infrastructure -.->|uses| Domain
-
-    classDef ui fill:#eef,stroke:#446;
+    Persistence -->|implements| Ports
+    AI -->|implements| Ports
+    Entities --> Rules
+    Infrastructure --> Domain
 ```
 
 ### Backend
