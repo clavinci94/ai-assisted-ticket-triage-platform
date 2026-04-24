@@ -176,8 +176,7 @@ DEMO_TICKETS: list[dict] = [
         "id": "DEMO-0013",
         "title": "Mobile App — Login-Schleife nach Update",
         "description": (
-            "Nach App-Update auf Version 4.12 landen einige User in Login-Schleife. "
-            "Betrifft iOS wie Android."
+            "Nach App-Update auf Version 4.12 landen einige User in Login-Schleife. Betrifft iOS wie Android."
         ),
         "department": "Digital Channels",
         "final_category": "bug",
@@ -189,8 +188,7 @@ DEMO_TICKETS: list[dict] = [
         "id": "DEMO-0014",
         "title": "Online-Banking zeigt alten Kontostand",
         "description": (
-            "Kontostand im Online-Banking bleibt für 24h stehen, trotz Buchungen. "
-            "Cache-Problem im Frontend?"
+            "Kontostand im Online-Banking bleibt für 24h stehen, trotz Buchungen. Cache-Problem im Frontend?"
         ),
         "department": "Digital Channels",
         "final_category": "bug",
@@ -213,8 +211,7 @@ DEMO_TICKETS: list[dict] = [
         "id": "DEMO-0016",
         "title": "KYC-Export für BaFin-Audit benötigt",
         "description": (
-            "Compliance benötigt anonymisierten Export der KYC-Daten Q1/2026 "
-            "für den anstehenden BaFin-Audit."
+            "Compliance benötigt anonymisierten Export der KYC-Daten Q1/2026 für den anstehenden BaFin-Audit."
         ),
         "department": "Risk & Compliance",
         "final_category": "requirement",
