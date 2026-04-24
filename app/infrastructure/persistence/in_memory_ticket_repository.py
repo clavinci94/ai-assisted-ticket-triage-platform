@@ -113,8 +113,7 @@ class InMemoryTicketRepository(TicketRepositoryPort):
                 summary="Ticketstatus geändert",
                 details=(
                     f"{self._format_status(previous_status)} -> "
-                    f"{self._format_status(status.value)}"
-                    + (f", Notiz={note}" if note else "")
+                    f"{self._format_status(status.value)}" + (f", Notiz={note}" if note else "")
                 ),
             )
         return record

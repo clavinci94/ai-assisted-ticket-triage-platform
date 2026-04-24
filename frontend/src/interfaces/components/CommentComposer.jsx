@@ -8,6 +8,7 @@ export default function CommentComposer({ onSubmit, submitting = false, defaultA
   });
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing an externally changed default (operator settings) into a locally-editable form field.
     setForm((current) => ({ ...current, actor: current.actor || defaultActor }));
   }, [defaultActor]);
 

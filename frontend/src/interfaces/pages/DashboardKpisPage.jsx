@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../components/ToastProvider";
 import SectionCard from "../components/SectionCard";
@@ -159,19 +159,6 @@ export default function DashboardKpisPage() {
   const priorityDistribution =
     analytics?.priority_distribution ||
     buildDistributionFromAccessor(tickets, (ticket) => getTicketPriority(ticket), ["low", "medium", "high", "critical"]);
-
-  const reviewFunnelData =
-    analytics?.review_funnel?.map((item) => ({
-      ...item,
-      fill:
-        item.name === "created"
-          ? "#64748b"
-          : item.name === "triaged"
-          ? "#3b82f6"
-          : item.name === "reviewed"
-          ? "#f59e0b"
-          : "#10b981",
-    })) || [];
 
   return (
     <div className="app-shell dashboard-shell">

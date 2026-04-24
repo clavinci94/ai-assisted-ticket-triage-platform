@@ -56,6 +56,7 @@ def test_llm_triage_endpoint_routes_ticket_using_litellm(monkeypatch):
                 ]
             },
         )
+
     monkeypatch.setattr("app.infrastructure.ai.litellm_classifier.completion", fake_completion)
     monkeypatch.delenv("LITELLM_API_KEY", raising=False)
     monkeypatch.delenv("LITELLM_API_BASE", raising=False)
@@ -72,7 +73,10 @@ def test_llm_triage_endpoint_routes_ticket_using_litellm(monkeypatch):
     assert body["final_category"] == "support"
     assert body["final_priority"] == "medium"
     assert body["analysis"]["suggested_department"] == "Digital Channels"
-    assert body["analysis"]["rationale"] == "The ticket describes an urgent account access issue best handled by support."
+    assert (
+        body["analysis"]["rationale"]
+        == "The ticket describes an urgent account access issue best handled by support."
+    )
     assert body["analysis"]["model_version"].startswith("litellm-")
 
     ticket_response = client.get(f"/tickets/{body['ticket_id']}")

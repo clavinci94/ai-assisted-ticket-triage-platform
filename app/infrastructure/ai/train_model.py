@@ -28,10 +28,12 @@ def train_model():
     texts = (df["title"].fillna("") + " " + df["body"].fillna("")).tolist()
     labels = df["label"].astype(str).tolist()
 
-    model = Pipeline([
-        ("tfidf", TfidfVectorizer()),
-        ("clf", MultinomialNB()),
-    ])
+    model = Pipeline(
+        [
+            ("tfidf", TfidfVectorizer()),
+            ("clf", MultinomialNB()),
+        ]
+    )
 
     model.fit(texts, labels)
 

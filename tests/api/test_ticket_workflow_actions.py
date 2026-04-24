@@ -2,7 +2,6 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-
 client = TestClient(app)
 
 
@@ -41,8 +40,7 @@ def test_status_endpoint_can_close_ticket_and_log_note():
 
     assert ticket_body["status"] == "closed"
     assert any(
-        event["event_type"] == "status_changed"
-        and "Manuell abgeschlossen" in (event.get("details") or "")
+        event["event_type"] == "status_changed" and "Manuell abgeschlossen" in (event.get("details") or "")
         for event in ticket_body["events"]
     )
 
@@ -82,8 +80,7 @@ def test_comment_endpoint_adds_comment_and_internal_note_events():
         for event in events
     )
     assert any(
-        event["event_type"] == "internal_note_added"
-        and "VIP-Fall" in (event.get("details") or "")
+        event["event_type"] == "internal_note_added" and "VIP-Fall" in (event.get("details") or "")
         for event in events
     )
 

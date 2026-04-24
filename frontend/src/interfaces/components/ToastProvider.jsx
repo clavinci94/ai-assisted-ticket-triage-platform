@@ -53,6 +53,7 @@ export function ToastProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- the hook is co-located with its provider by design; moving it would break import ergonomics for every consumer.
 export function useToast() {
   const context = useContext(ToastContext);
 

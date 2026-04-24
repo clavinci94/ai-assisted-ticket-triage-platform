@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.application.ports.classifier_port import ClassifierPort
 from app.domain.constants.departments import infer_department_from_text
@@ -51,7 +51,7 @@ class MLClassifier(ClassifierPort):
             next_step=next_step,
             rationale=rationale,
             model_version=self.model_version,
-            analyzed_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            analyzed_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
 
     def _map_label_to_category(self, label: str) -> TicketCategory:

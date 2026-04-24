@@ -46,9 +46,7 @@ class GetDashboardAnalyticsUseCase:
         )
 
         reviewed_tickets = [ticket for ticket in tickets if ticket["reviewed"]]
-        accepted_ai_count = sum(
-            1 for ticket in reviewed_tickets if ticket["accepted_ai_suggestion"] is True
-        )
+        accepted_ai_count = sum(1 for ticket in reviewed_tickets if ticket["accepted_ai_suggestion"] is True)
         adjusted_ai_count = max(len(reviewed_tickets) - accepted_ai_count, 0)
 
         acceptance_rate = round((accepted_ai_count / len(reviewed_tickets)) * 100) if reviewed_tickets else 0
@@ -75,7 +73,9 @@ class GetDashboardAnalyticsUseCase:
 
         recent_activity = sorted(
             tickets,
-            key=lambda ticket: self._coerce_datetime(ticket["updated_at"]) or datetime.min.replace(tzinfo=UTC),
+            key=lambda ticket: (
+                self._coerce_datetime(ticket["updated_at"]) or datetime.min.replace(tzinfo=UTC)
+            ),
             reverse=True,
         )[:5]
 
@@ -206,7 +206,9 @@ class GetDashboardAnalyticsUseCase:
             "created_at": created_at,
             "updated_at": updated_at,
             "closed_at": closed_at,
-            "accepted_ai_suggestion": bool(getattr(decision, "accepted_ai_suggestion", False)) if decision else False,
+            "accepted_ai_suggestion": bool(getattr(decision, "accepted_ai_suggestion", False))
+            if decision
+            else False,
             "reviewed": decision is not None,
             "assigned": assignment is not None,
         }
@@ -283,15 +285,15 @@ class GetDashboardAnalyticsUseCase:
 
         for ticket in tickets:
             created_at = self._coerce_datetime(ticket.get("created_at"))
-            finished_at = self._coerce_datetime(ticket.get("closed_at")) or self._coerce_datetime(ticket.get("updated_at"))
+            finished_at = self._coerce_datetime(ticket.get("closed_at")) or self._coerce_datetime(
+                ticket.get("updated_at")
+            )
             priority = str(ticket.get("priority") or "unknown").lower()
 
             if created_at is None or finished_at is None or finished_at < created_at:
                 continue
 
-            grouped_durations[priority].append(
-                (finished_at - created_at).total_seconds() / 3600
-            )
+            grouped_durations[priority].append((finished_at - created_at).total_seconds() / 3600)
 
         ordered_priorities = ["low", "medium", "high", "critical"]
         items: list[dict[str, int | str]] = []
@@ -361,10 +363,7 @@ class GetDashboardAnalyticsUseCase:
                 continue
             counts[created_at.date().isoformat()] += 1
 
-        return [
-            {"date": date_key, "value": value}
-            for date_key, value in sorted(counts.items())
-        ]
+        return [{"date": date_key, "value": value} for date_key, value in sorted(counts.items())]
 
     def _build_backlog_development(self, tickets: list[dict[str, Any]]) -> list[dict[str, int | str]]:
         created_counts: Counter[str] = Counter()
@@ -407,11 +406,7 @@ class GetDashboardAnalyticsUseCase:
     ) -> list[dict[str, int | str]]:
         normalized_items = [str(item.get(key) or "unknown") for item in items]
         counts = Counter(value.lower() for value in normalized_items)
-        display_labels = {
-            value.lower(): value
-            for value in normalized_items
-            if value
-        }
+        display_labels = {value.lower(): value for value in normalized_items if value}
         result: list[dict[str, int | str]] = []
 
         for label in ordered_labels:

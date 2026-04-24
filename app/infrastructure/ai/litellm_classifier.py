@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.application.ports.classifier_port import ClassifierPort
 from app.domain.constants.departments import (
@@ -40,16 +40,10 @@ class LitellmClassifier(ClassifierPort):
         self.proxy_api_key = os.getenv("LITELLM_API_KEY") or os.getenv("OPENAI_API_KEY")
 
         self.api_key = (
-            api_key
-            or os.getenv("AZURE_API_KEY")
-            or os.getenv("AZURE_AI_API_KEY")
-            or self.proxy_api_key
+            api_key or os.getenv("AZURE_API_KEY") or os.getenv("AZURE_AI_API_KEY") or self.proxy_api_key
         )
         self.api_base = (
-            api_base
-            or os.getenv("AZURE_API_BASE")
-            or os.getenv("AZURE_AI_API_BASE")
-            or self.proxy_api_base
+            api_base or os.getenv("AZURE_API_BASE") or os.getenv("AZURE_AI_API_BASE") or self.proxy_api_base
         )
         self.api_version = api_version or os.getenv("AZURE_API_VERSION") or os.getenv("LITELLM_API_VERSION")
 
@@ -91,7 +85,7 @@ class LitellmClassifier(ClassifierPort):
                     "Use only the allowed categories: bug, feature, support, requirement, question, unknown. "
                     "Use only the allowed priorities: low, medium, high, critical. "
                     f"Use only one of these departments for suggested_department: {', '.join(KNOWN_DEPARTMENTS)}. "
-                    "Route all tickets to the IT support area using suggested_team=\"it-support-team\" unless there is a clear reason to escalate elsewhere. "
+                    'Route all tickets to the IT support area using suggested_team="it-support-team" unless there is a clear reason to escalate elsewhere. '
                     "Write summary, next_step, and rationale in German. Keep each of them concise and limited to one short sentence. "
                     "Return valid JSON only, without any additional explanation."
                 ),
@@ -150,7 +144,9 @@ class LitellmClassifier(ClassifierPort):
         )
         next_step = str(parsed.get("next_step", "Ticket manuell prüfen.")).strip()
         summary = str(parsed.get("summary", f"KI-gestützte Triage für Ticket: {ticket.title}")).strip()
-        rationale = str(parsed.get("rationale", "KI-Empfehlung wurde anhand der Routing-Vorgaben erstellt.")).strip()
+        rationale = str(
+            parsed.get("rationale", "KI-Empfehlung wurde anhand der Routing-Vorgaben erstellt.")
+        ).strip()
 
         return TriageAnalysis(
             predicted_category=category,
@@ -163,7 +159,7 @@ class LitellmClassifier(ClassifierPort):
             next_step=next_step,
             rationale=rationale,
             model_version=f"litellm-{self.model_name}",
-            analyzed_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            analyzed_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
 
     def _extract_text(self, response: object) -> str:
@@ -173,7 +169,7 @@ class LitellmClassifier(ClassifierPort):
         content = None
 
         if hasattr(response, "choices"):
-            choices = getattr(response, "choices") or []
+            choices = response.choices or []
             if len(choices) > 0:
                 choice = choices[0]
                 message = getattr(choice, "message", None)
@@ -197,7 +193,7 @@ class LitellmClassifier(ClassifierPort):
 
         try:
             return json.loads(content)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as decode_error:
             match = re.search(r"\{.*\}", content, re.S)
             if match:
                 try:
@@ -210,7 +206,7 @@ class LitellmClassifier(ClassifierPort):
             if recovered:
                 return recovered
 
-            raise ValueError(f"Unable to parse LLM response as JSON: {content!r}")
+            raise ValueError(f"Unable to parse LLM response as JSON: {content!r}") from decode_error
 
     def _recover_partial_json(self, content: str) -> dict:
         supported_keys = [

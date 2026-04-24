@@ -175,6 +175,7 @@ function AppTopbar() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing URL → state is exactly the kind of external-sync effect allowed by the rule.
     setGlobalSearch(params.get("q") || "");
   }, [location.search]);
 

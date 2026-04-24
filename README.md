@@ -1,8 +1,18 @@
 # AI-assisted Ticket Triage Platform
 
+[![CI](https://github.com/clavinci94/ai-assisted-ticket-triage-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/clavinci94/ai-assisted-ticket-triage-platform/actions/workflows/ci.yml)
+[![Release](https://github.com/clavinci94/ai-assisted-ticket-triage-platform/actions/workflows/release.yml/badge.svg)](https://github.com/clavinci94/ai-assisted-ticket-triage-platform/actions/workflows/release.yml)
+[![CD](https://github.com/clavinci94/ai-assisted-ticket-triage-platform/actions/workflows/cd.yml/badge.svg?branch=main)](https://github.com/clavinci94/ai-assisted-ticket-triage-platform/actions/workflows/cd.yml)
+[![Coverage ≥ 75%](https://img.shields.io/badge/coverage-%E2%89%A575%25-brightgreen.svg)](./pyproject.toml)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
+[![Node 20](https://img.shields.io/badge/node-20.x-green.svg)](https://nodejs.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](./LICENSE)
+
 Modern ticket triage and operations dashboard for internal support teams. The project combines a FastAPI backend, a React/Vite frontend, AI-assisted ticket classification via LiteLLM, and a banking-style operator UI focused on review, assignment, SLA tracking, and reporting.
 
 The current product state covers the full flow from ticket intake to AI recommendation, manual review, assignment, status handling, audit trail, workbench views, and reporting pages.
+
+Agent- und Tool-Dokumentation: siehe **[AGENTS.md](./AGENTS.md)**.
 
 ## 🔄 Recent Updates (April 2026)
 
@@ -114,10 +124,19 @@ See [CHANGES.md](./CHANGES.md) for detailed technical breakdown.
 │   │   ├── infrastructure
 │   │   └── interfaces
 │   └── package.json
-├── tests
+├── tests                    # pytest: unit / application / api
 │   ├── api
 │   ├── application
 │   └── unit
+├── e2e                      # Playwright end-to-end tests
+│   ├── tests
+│   └── playwright.config.js
+├── .github/workflows        # CI, Release, CD pipelines
+├── AGENTS.md                # agent & tool documentation
+├── docs/adr/                # architecture decision records
+├── Dockerfile               # multi-stage image (frontend + backend)
+├── pyproject.toml           # pytest / ruff / coverage / bandit config
+├── .pre-commit-config.yaml  # lint & security hooks for local commits
 ├── .env.example
 ├── litellm_config.yaml
 ├── README.md
@@ -127,12 +146,56 @@ See [CHANGES.md](./CHANGES.md) for detailed technical breakdown.
 
 ## Architecture Layers
 
+```mermaid
+flowchart LR
+    subgraph Interfaces["Interfaces (FastAPI + Pydantic)"]
+        Routes["routes/\n• tickets\n• admin\n• system"]
+        Schemas["schemas/"]
+        Middleware["middleware\nrequest-id · API key"]
+    end
+
+    subgraph Application["Application (use cases + ports)"]
+        UseCases["use_cases/\n• triage_ticket\n• assign_ticket\n• escalate_ticket\n• …"]
+        Ports["ports/\n• ClassifierPort\n• TicketRepository"]
+        DTOs["DTOs"]
+    end
+
+    subgraph Domain["Domain (pure Python)"]
+        Entities["entities/\nTicket · TicketEvent\nAssignment · TriageAnalysis\nTriageDecision"]
+        Rules["rules/\npriority_rules"]
+        Enums["enums/"]
+    end
+
+    subgraph Infrastructure["Infrastructure (adapters)"]
+        Persistence["persistence/\nSQLAlchemy models\nSQLite · Postgres"]
+        AI["ai/\nLiteLLM · ML classifier"]
+        Logging["logging/\nJSON logs + request_id"]
+    end
+
+    UI["React / Vite\nfrontend/"]:::ui -->|HTTP + Axios| Routes
+    Routes --> UseCases
+    Middleware -.-> Routes
+    UseCases --> Ports
+    UseCases --> Entities
+    Ports <-- implements --- Persistence
+    Ports <-- implements --- AI
+    Entities -.-> Rules
+    Infrastructure -.->|uses| Domain
+
+    classDef ui fill:#eef,stroke:#446;
+```
+
 ### Backend
 
-- `domain`: entities, enums, business constants, and domain rules
+- `domain`: entities, enums, business constants, and domain rules (**no framework imports**)
 - `application`: use cases, DTOs, and abstract ports
-- `infrastructure`: persistence, AI adapters, configuration, and technical services
-- `interfaces`: HTTP routes, schemas, request mapping, and API composition
+- `infrastructure`: persistence, AI adapters, configuration, logging, technical services
+- `interfaces`: HTTP routes, schemas, request mapping, middleware, and API composition
+
+Every dependency arrow points inwards (Interfaces / Infrastructure → Application → Domain),
+so swapping SQLite for Postgres or LiteLLM for a different backend never touches business logic.
+
+See [`docs/adr/`](./docs/adr/) for the decisions behind this layering (Architecture Decision Records).
 
 ### Frontend
 
@@ -186,7 +249,11 @@ See [CHANGES.md](./CHANGES.md) for detailed technical breakdown.
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | `POST` | `/admin/retrain` | Retrain the classic ML model |
-| `GET` | `/health` | Service health check |
+| `GET` | `/health` | Liveness probe (no dependencies) |
+| `GET` | `/ready` | Readiness probe (verifies DB connectivity) |
+
+Every response carries an `X-Request-ID` header; pass one in yourself to
+propagate a correlation id across the stack (logs tag every line with it).
 
 ## Analytics Currently Exposed
 
@@ -307,6 +374,11 @@ LITELLM_MODEL=azure_ai/gpt-oss-120b
 | `OPENAI_API_KEY` | Supported alias for the LiteLLM proxy key |
 | `AZURE_API_BASE` | Optional direct Azure AI endpoint |
 | `AZURE_API_KEY` | Optional direct Azure AI key |
+| `DATABASE_URL` | Postgres/SQLite DSN (defaults to local `./triage.db`) |
+| `API_KEY` | If set, every non-public request must send a matching `X-API-Key` header. Unset → auth disabled. |
+| `LOG_LEVEL` | `DEBUG` / `INFO` / `WARNING`. Defaults to `INFO`. Logs are emitted as JSON lines. |
+| `CORS_ALLOW_ORIGINS` | Comma-separated allow-list. Defaults to localhost dev ports. |
+| `CORS_ALLOW_ORIGIN_REGEX` | Pattern used in production (e.g. `^https://.*\\.onrender\\.com$`). |
 
 Notes:
 
@@ -324,19 +396,114 @@ Notes:
 
 ## Testing
 
-### Backend
+The test pyramid covers three layers — all three run in CI on every push / PR.
+
+### Backend (pytest)
+
+Unit tests, application-layer tests, and API integration tests:
 
 ```bash
-pytest
+pytest                       # all tests
+pytest tests/unit            # just unit tests
+pytest --cov=app             # with coverage (fails under 75%)
 ```
 
-### Frontend
+Lint, format, and static security scan:
+
+```bash
+ruff check app tests
+ruff format app tests
+bandit -r app -c pyproject.toml
+```
+
+### Frontend (Vitest + Testing Library)
 
 ```bash
 cd frontend
-npm run build
+npm install
+npm test                     # one-shot run (used in CI)
+npm run test:watch           # watch mode
+npm run test:coverage        # coverage report under frontend/coverage/
+npm run lint                 # ESLint
+npm run build                # production build
 ```
+
+### End-to-End (Playwright)
+
+The E2E suite spins up the backend (against a disposable SQLite file) and the Vite
+dev server, then drives them with Chromium.
+
+```bash
+cd e2e
+npm install
+npm run install-browsers     # one-time: fetch Chromium
+npm test
+```
+
+See [`e2e/README.md`](./e2e/README.md) for configuration details (ports,
+env vars, report locations).
+
+## CI / CD
+
+| Workflow | Trigger | Purpose |
+| --- | --- | --- |
+| [`ci.yml`](./.github/workflows/ci.yml) | push / PR on `main` | ruff + pytest (75 % coverage gate) + Vitest + ESLint + Vite build + Playwright E2E + bandit + pip-audit + npm audit |
+| [`release.yml`](./.github/workflows/release.yml) | git tag `v*.*.*` | Build Docker image, push to GHCR, create GitHub Release |
+| [`cd.yml`](./.github/workflows/cd.yml) | successful CI on `main` | Trigger Render deploy hooks for API + frontend |
+
+[Dependabot](./.github/dependabot.yml) opens weekly PRs for Python, npm,
+GitHub Actions, and Docker base-image updates. A local
+[pre-commit config](./.pre-commit-config.yaml) runs ruff, bandit, gitleaks,
+and generic hygiene hooks on every commit — install once with
+`pip install pre-commit && pre-commit install`.
+
+### Required GitHub secrets (for CD)
+
+| Secret | Required by | Source |
+| --- | --- | --- |
+| `RENDER_DEPLOY_HOOK_API` | `cd.yml` | Render Dashboard → Backend service → Deploy Hook |
+| `RENDER_DEPLOY_HOOK_FRONTEND` | `cd.yml` | Render Dashboard → Static Site → Deploy Hook |
+
+GHCR pushes use the default `GITHUB_TOKEN`; no extra secret is needed.
+
+## Docker
+
+A multi-stage [`Dockerfile`](./Dockerfile) builds the React frontend and packages
+it alongside the FastAPI backend in a single `python:3.11-slim` runtime image
+(non-root user, healthcheck on `/health`).
+
+```bash
+docker build -t ticket-triage:local .
+docker run --rm -p 8000:8000 \
+  -e DATABASE_URL=sqlite:///./triage.db \
+  -e LITELLM_API_BASE=... \
+  -e LITELLM_API_KEY=... \
+  ticket-triage:local
+```
+
+Published images (on tagged releases): `ghcr.io/clavinci94/ai-assisted-ticket-triage-platform:<version>`.
+
+```bash
+docker pull ghcr.io/clavinci94/ai-assisted-ticket-triage-platform:latest
+```
+
+### SQLite to Render/Postgres Migration
+
+To copy your local `triage.db` into another database such as Render Postgres, run:
+
+```bash
+DATABASE_URL="your-render-internal-database-url" .venv/bin/python scripts/migrate_sqlite_to_database.py
+```
+
+Optional full replace of the target data:
+
+```bash
+DATABASE_URL="your-render-internal-database-url" .venv/bin/python scripts/migrate_sqlite_to_database.py --replace
+```
+
+If you run the migration from your local machine into Render Postgres, use the Render `External Database URL`.
+The `Internal Database URL` only works from services running inside Render.
 
 ## License
 
-No license file is currently included in this repository.
+Released under the MIT License — see [LICENSE](./LICENSE).

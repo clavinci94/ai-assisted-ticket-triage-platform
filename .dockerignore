@@ -1,0 +1,48 @@
+# Version control
+.git
+.gitignore
+.github
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+*.egg-info/
+
+# Environment / secrets
+.env
+.env.*
+litellm_config.yaml
+
+# Local databases
+triage.db
+triage.db.bak*
+data/*.db
+
+# Node / frontend caches
+frontend/node_modules
+frontend/dist
+frontend/.backup
+frontend/.vite-temp
+
+# Editor / OS
+.idea
+.vscode
+.DS_Store
+
+# Project-specific backups
+.apex-backups
+.apex-review
+.sixth
+
+# Tests (kept out of runtime image; CI runs them separately)
+tests/
+
+# Docs & dev helpers not required at runtime
+CHANGES.md
+dev.sh

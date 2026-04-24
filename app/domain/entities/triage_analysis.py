@@ -1,5 +1,5 @@
-from datetime import datetime
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from app.domain.enums.ticket_category import TicketCategory
 from app.domain.enums.ticket_priority import TicketPriority

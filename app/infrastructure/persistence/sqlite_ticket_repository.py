@@ -116,11 +116,7 @@ class SQLiteTicketRepository(TicketRepositoryPort):
                 f"Endgültige Priorität={self._format_priority(decision.final_priority.value)}, "
                 f"Endgültiges Team={decision.final_team}, "
                 f"KI akzeptiert={self._format_boolean(decision.accepted_ai_suggestion)}"
-                + (
-                    f", Kommentar={decision.review_comment}"
-                    if decision.review_comment
-                    else ""
-                )
+                + (f", Kommentar={decision.review_comment}" if decision.review_comment else "")
             ),
         )
 
@@ -143,16 +139,8 @@ class SQLiteTicketRepository(TicketRepositoryPort):
             summary="Zuweisung gespeichert",
             details=(
                 f"Zugewiesenes Team={assignment.assigned_team}"
-                + (
-                    f", Bearbeitung={assignment.assignee}"
-                    if assignment.assignee
-                    else ""
-                )
-                + (
-                    f", Notiz={assignment.assignment_note}"
-                    if assignment.assignment_note
-                    else ""
-                )
+                + (f", Bearbeitung={assignment.assignee}" if assignment.assignee else "")
+                + (f", Notiz={assignment.assignment_note}" if assignment.assignment_note else "")
             ),
         )
 
@@ -179,8 +167,7 @@ class SQLiteTicketRepository(TicketRepositoryPort):
                 summary="Ticketstatus geändert",
                 details=(
                     f"{self._format_status(previous_status)} -> "
-                    f"{self._format_status(status.value)}"
-                    + (f", Notiz={note}" if note else "")
+                    f"{self._format_status(status.value)}" + (f", Notiz={note}" if note else "")
                 ),
             )
 

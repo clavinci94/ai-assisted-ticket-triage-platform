@@ -61,7 +61,7 @@ export default function DashboardDepartmentsPage() {
 
   const [tickets, setTickets] = useState([]);
   const [analytics, setAnalytics] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
 
   async function loadAnalytics() {
     try {

@@ -143,7 +143,7 @@ def canonicalize_department_label(value: str | None, fallback: str | None = None
 
 def infer_department_from_text(text: str, fallback: str | None = None) -> str:
     lowered = text.lower()
-    scores = {department: 0 for department in KNOWN_DEPARTMENTS}
+    scores = dict.fromkeys(KNOWN_DEPARTMENTS, 0)
 
     for department, keywords in _DEPARTMENT_KEYWORDS.items():
         for keyword in keywords:

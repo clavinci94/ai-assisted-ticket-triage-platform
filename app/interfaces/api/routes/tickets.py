@@ -5,25 +5,26 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.application.use_cases.assign_ticket import AssignTicketUseCase
 from app.application.use_cases.add_ticket_comment import AddTicketCommentUseCase
+from app.application.use_cases.assign_ticket import AssignTicketUseCase
 from app.application.use_cases.escalate_ticket import EscalateTicketUseCase
+from app.application.use_cases.get_dashboard_analytics import GetDashboardAnalyticsUseCase
 from app.application.use_cases.get_ticket import GetTicketUseCase
 from app.application.use_cases.list_tickets import ListTicketsUseCase
 from app.application.use_cases.review_triage_decision import ReviewTriageDecisionUseCase
 from app.application.use_cases.save_triage_decision import SaveTriageDecisionUseCase
 from app.application.use_cases.triage_ticket import TriageTicketUseCase
-from app.application.use_cases.get_dashboard_analytics import GetDashboardAnalyticsUseCase
 from app.application.use_cases.update_ticket_status import UpdateTicketStatusUseCase
 from app.domain.entities.assignment import Assignment
 from app.domain.enums.ticket_status import TicketStatus
 from app.infrastructure.ai.ml_classifier import MLClassifier
 from app.infrastructure.persistence.sqlite_ticket_repository import SQLiteTicketRepository
 from app.interfaces.api.dependencies import get_db_session, get_ticket_repository
+from app.interfaces.api.mappers.ticket_mapper import to_domain_ticket
 from app.interfaces.api.schemas.ticket_schemas import (
+    DashboardAnalyticsResponse,
     TicketAssignmentRequest,
     TicketAssignmentResponse,
-    DashboardAnalyticsResponse,
     TicketCommentRequest,
     TicketCommentResponse,
     TicketCreateRequest,
@@ -40,7 +41,6 @@ from app.interfaces.api.schemas.ticket_schemas import (
     TriageDecisionResponse,
     TriageResponse,
 )
-from app.interfaces.api.mappers.ticket_mapper import to_domain_ticket
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
@@ -270,9 +270,7 @@ def _to_ticket_list_item_response(record) -> TicketListItemResponse:
 
 def _build_ticket_list_facets(items: list[TicketListItemResponse]) -> TicketListFacetsResponse:
     def unique(values: list[str]) -> list[str]:
-        normalized_values = {
-            value for value in values if value
-        }
+        normalized_values = {value for value in values if value}
         return sorted(normalized_values, key=lambda value: value.lower())
 
     return TicketListFacetsResponse(
@@ -305,7 +303,12 @@ def _matches_ticket_view(
         return normalized_status in {"new", "triaged", "reviewed", "assigned"}
 
     if normalized_view == "escalations":
-        return normalized_priority in {"high", "critical"} and normalized_status in {"new", "triaged", "reviewed", "assigned"}
+        return normalized_priority in {"high", "critical"} and normalized_status in {
+            "new",
+            "triaged",
+            "reviewed",
+            "assigned",
+        }
 
     return True
 
@@ -345,7 +348,7 @@ def _matches_ticket_filters(
     if department and _normalize(item.department) != _normalize(department):
         return False
 
-    if source and _normalize(item.source) != _normalize(source):
+    if source and _normalize(item.source) != _normalize(source):  # noqa: SIM103 — keep guard-clause symmetry
         return False
 
     return True
@@ -428,7 +431,7 @@ def triage_ticket_with_llm(
         )
         result = use_case.execute(ticket)
     except Exception as error:
-        raise HTTPException(status_code=500, detail=str(error))
+        raise HTTPException(status_code=500, detail=str(error)) from error
 
     return TriageResponse(
         ticket_id=result.ticket_id,
@@ -451,7 +454,7 @@ def preview_ticket_with_llm(
 
         analysis = LitellmClassifier().analyze(ticket)
     except Exception as error:
-        raise HTTPException(status_code=500, detail=str(error))
+        raise HTTPException(status_code=500, detail=str(error)) from error
 
     return _to_analysis_response(analysis)
 
@@ -526,8 +529,8 @@ def update_ticket_status(
             actor=request.actor,
             note=request.note,
         )
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid status")
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="Invalid status") from error
 
     return _to_status_update_response(
         updated_record.ticket.id,
@@ -556,8 +559,8 @@ def add_ticket_comment(
             body=request.body,
             is_internal=request.is_internal,
         )
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Comment body must not be empty")
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="Comment body must not be empty") from error
 
     return _to_comment_response(request)
 
@@ -584,7 +587,7 @@ def escalate_ticket(
             priority=request.priority,
         )
     except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error))
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
     return _to_escalation_response(
         ticket_id=updated_record.ticket.id,

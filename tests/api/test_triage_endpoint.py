@@ -2,7 +2,6 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-
 client = TestClient(app)
 
 
@@ -23,7 +22,14 @@ def test_triage_endpoint_returns_audit_metadata():
     assert "analysis" in body
 
     analysis = body["analysis"]
-    assert analysis["predicted_category"] in {"bug", "feature", "support", "requirement", "question", "unknown"}
+    assert analysis["predicted_category"] in {
+        "bug",
+        "feature",
+        "support",
+        "requirement",
+        "question",
+        "unknown",
+    }
     assert "model_version" in analysis
     assert analysis["model_version"] == "tfidf-mnb-v1"
     assert "analyzed_at" in analysis
