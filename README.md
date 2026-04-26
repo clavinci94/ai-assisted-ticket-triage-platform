@@ -14,16 +14,6 @@ The current product state covers the full flow from ticket intake to AI recommen
 
 Agent- und Tool-Dokumentation: siehe **[AGENTS.md](./AGENTS.md)**.
 
-## 🔄 Recent Updates (April 2026)
-
-**Commit `882d354`** — *refactor: Improve LLM robustness & enhance dashboard UX*
-- **Backend**: LiteLLM Classifier now gracefully recovers from truncated JSON responses via `_recover_partial_json()` method
-- **Frontend**: Dashboard hero section now displays operative KPI metrics (Offen/Review/Zuweisung)
-- **UI/UX**: Enhanced command-bar grid layout, reduced visual noise, improved responsive styling
-- **QA**: All endpoints tested, security verified (API keys in `.env` only, not hardcoded)
-
-See [CHANGES.md](./CHANGES.md) for detailed technical breakdown.
-
 ## Highlights
 
 - AI-assisted ticket intake with preview before persistence
@@ -133,17 +123,19 @@ See [CHANGES.md](./CHANGES.md) for detailed technical breakdown.
 ├── e2e                      # Playwright end-to-end tests
 │   ├── tests
 │   └── playwright.config.js
+├── scripts                  # operational helpers (seed, migrate)
+├── data                     # training data (issues.csv)
+├── docs/adr                 # architecture decision records (incl. 0004 RAG)
 ├── .github/workflows        # CI, Release, CD pipelines
 ├── AGENTS.md                # agent & tool documentation
-├── docs/adr/                # architecture decision records (incl. 0004 RAG)
 ├── Dockerfile               # multi-stage image (frontend + backend)
+├── render.yaml              # Render deployment config
 ├── pyproject.toml           # pytest / ruff / coverage / bandit config
 ├── .pre-commit-config.yaml  # lint & security hooks for local commits
 ├── .env.example
-├── litellm_config.yaml
+├── dev.sh                   # local backend + frontend launcher
 ├── README.md
-├── requirements.txt
-└── pytest.ini
+└── requirements.txt
 ```
 
 ## Architecture Layers

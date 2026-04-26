@@ -44,5 +44,4 @@ frontend/.vite-temp
 tests/
 
 # Docs & dev helpers not required at runtime
-CHANGES.md
 dev.sh
