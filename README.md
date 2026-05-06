@@ -16,8 +16,6 @@ A FastAPI backend, a React/Vite operator UI, and an AI layer that turns unstruct
 
 ## Demo
 
-## Demo
-
 **[Try the live demo →](https://ai-assisted-ticket-triage-frontend.onrender.com/)**
 
 > Hosted on Render's free tier — the first request after inactivity may take 30–60 s to wake the backend.
