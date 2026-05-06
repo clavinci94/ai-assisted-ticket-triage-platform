@@ -16,10 +16,35 @@ A FastAPI backend, a React/Vite operator UI, and an AI layer that turns unstruct
 
 ## Demo
 
-> _Add screenshots or a 30–60 s Loom video here. Suggested shots:_
-> - _Ticket creation with AI preview popup (showing the top-3 similar past tickets)_
-> - _Operator workbench with filters and bulk actions_
-> - _Reporting dashboard with KPIs and SLA monitoring_
+## Demo
+
+**[Try the live demo →](https://ai-assisted-ticket-triage-frontend.onrender.com/)**
+
+> Hosted on Render's free tier — the first request after inactivity may take 30–60 s to wake the backend.
+
+### AI-assisted intake with retrieval-grounded recommendations
+
+![AI recommendation modal with similar past cases](docs/screenshots/ai-recommendation-modal.png)
+
+The operator sees the AI's suggested department, its reasoning, **and the most similar past tickets that a human reviewer has already routed** — with a similarity score. Accept, override, or cancel before anything is saved.
+
+### Operations dashboard
+
+![Dashboard with KPIs and ticket queues](docs/screenshots/Dashboard-overview.png)
+
+Live KPIs (total / open / critical / triaged / reviewed / active departments) plus three operational queues: critical tickets, review queue, latest tickets.
+
+### Reporting & analytics
+
+![Reporting page with charts and team breakdowns](docs/screenshots/Reports-overview.png)
+
+Ticket volume over time, backlog development, processing time by priority, top assignees, and active teams — with 7/30/90-day filtering.
+
+### Operator workbench
+
+![Ticket workbench table with filters and sorting](docs/screenshots/Tickets-workbench.png)
+
+Filter by status, priority, department, and source. Sort by any column. Bulk actions, pagination, column visibility — built for daily ticket review work.
 
 ---
 
