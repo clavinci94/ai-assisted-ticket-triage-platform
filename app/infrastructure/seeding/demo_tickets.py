@@ -1,4 +1,4 @@
-"""Reusable demo-data seeder for the retrieval-augmented triage demo.
+"""Reusable data seeder for the retrieval-augmented triage demo.
 
 Exposes one side-effect function, ``seed(replace: bool) -> int``, and the
 ``DEMO_TICKETS`` list of realistic Bank-IT support cases across six
@@ -22,7 +22,7 @@ from app.infrastructure.persistence.db import (
 )
 from app.infrastructure.persistence.models import TicketRecordModel
 
-SEED_PREFIX = "DEMO-"
+SEED_PREFIX = "00"
 
 
 def _ts(days_ago: int) -> datetime:
@@ -32,7 +32,7 @@ def _ts(days_ago: int) -> datetime:
 DEMO_TICKETS: list[dict] = [
     # -------------------------- VPN / Network --------------------------
     {
-        "id": "DEMO-0001",
+        "id": "1",
         "title": "VPN Citrix Workspace verbindet nicht",
         "description": (
             "Mitarbeiter aus dem Retail-Backoffice meldet wiederholte "
@@ -45,7 +45,7 @@ DEMO_TICKETS: list[dict] = [
         "tags": ["vpn", "citrix", "windows"],
     },
     {
-        "id": "DEMO-0002",
+        "id": "2",
         "title": "Citrix startet auf Mac nicht mehr",
         "description": (
             "Nach macOS-Update (Sonoma) schlägt der VPN-Login mit Fehler 500 fehl. "
@@ -58,7 +58,7 @@ DEMO_TICKETS: list[dict] = [
         "tags": ["vpn", "citrix", "macos"],
     },
     {
-        "id": "DEMO-0003",
+        "id": "3",
         "title": "WLAN im Konferenzraum 2B instabil",
         "description": (
             "Verbindung zum Konferenz-WLAN bricht ca. alle 15 Minuten ab, betrifft alle Geräte im Raum."
@@ -71,7 +71,7 @@ DEMO_TICKETS: list[dict] = [
     },
     # -------------------------- User Services --------------------------
     {
-        "id": "DEMO-0004",
+        "id": "4",
         "title": "Passwort-Reset für SAP FI",
         "description": "Benutzer aus Finanzbuchhaltung hat sein SAP-Passwort vergessen. Kein AD-Zugriff möglich.",
         "department": "Bank-IT Support",
@@ -81,7 +81,7 @@ DEMO_TICKETS: list[dict] = [
         "tags": ["password", "sap"],
     },
     {
-        "id": "DEMO-0005",
+        "id": "5",
         "title": "Neuer Mitarbeiter — Zugänge einrichten",
         "description": (
             "Onboarding für Junior-Kreditanalyst. Benötigt Mailbox, AD-Account, "
@@ -94,7 +94,7 @@ DEMO_TICKETS: list[dict] = [
         "tags": ["onboarding", "access"],
     },
     {
-        "id": "DEMO-0006",
+        "id": "6",
         "title": "Berechtigung für Laufwerk K: fehlt",
         "description": "Kollegin kann das gemeinsame Laufwerk K: nicht öffnen seit Rollen-Umbenennung.",
         "department": "Bank-IT Support",
@@ -105,7 +105,7 @@ DEMO_TICKETS: list[dict] = [
     },
     # -------------------------- Hardware --------------------------
     {
-        "id": "DEMO-0007",
+        "id": "7",
         "title": "Drucker Etage 3 offline",
         "description": "Etagendrucker (Kyocera TASKalfa) reagiert seit heute Morgen nicht mehr.",
         "department": "Bank-IT Support",
@@ -115,7 +115,7 @@ DEMO_TICKETS: list[dict] = [
         "tags": ["printer", "hardware"],
     },
     {
-        "id": "DEMO-0008",
+        "id": "8",
         "title": "Monitor zeigt kein Bild mehr",
         "description": "Externer Monitor am Laptop-Dock funktioniert nach Kabeltausch nicht mehr.",
         "department": "Bank-IT Support",
@@ -125,7 +125,7 @@ DEMO_TICKETS: list[dict] = [
         "tags": ["hardware", "monitor"],
     },
     {
-        "id": "DEMO-0009",
+        "id": "9",
         "title": "Headset Bluetooth verbindet sich nicht",
         "description": "Dienst-Headset Jabra verbindet sich nicht mehr mit Teams auf Windows-Laptop.",
         "department": "Bank-IT Support",
@@ -136,7 +136,7 @@ DEMO_TICKETS: list[dict] = [
     },
     # -------------------------- Payments Ops --------------------------
     {
-        "id": "DEMO-0010",
+        "id": "10",
         "title": "SEPA-Datei wird nicht verarbeitet",
         "description": (
             "Hochgeladene SEPA-XML-Datei wird im Payments-Portal nicht gebucht. "
@@ -149,7 +149,7 @@ DEMO_TICKETS: list[dict] = [
         "tags": ["sepa", "payments"],
     },
     {
-        "id": "DEMO-0011",
+        "id": "11",
         "title": "SWIFT-MT103 wird zurückgewiesen",
         "description": "Auslandsüberweisung per SWIFT MT103 wird mit Reject-Code 72 zurückgewiesen.",
         "department": "Payments Operations",
@@ -159,7 +159,7 @@ DEMO_TICKETS: list[dict] = [
         "tags": ["swift", "payments"],
     },
     {
-        "id": "DEMO-0012",
+        "id": "12",
         "title": "IBAN-Validierung schlägt fehl",
         "description": (
             "Gültige belgische IBAN wird im Kundenportal als ungültig markiert. "
@@ -173,7 +173,7 @@ DEMO_TICKETS: list[dict] = [
     },
     # -------------------------- Digital Channels --------------------------
     {
-        "id": "DEMO-0013",
+        "id": "13",
         "title": "Mobile App — Login-Schleife nach Update",
         "description": (
             "Nach App-Update auf Version 4.12 landen einige User in Login-Schleife. Betrifft iOS wie Android."
@@ -185,7 +185,7 @@ DEMO_TICKETS: list[dict] = [
         "tags": ["mobile-app", "login"],
     },
     {
-        "id": "DEMO-0014",
+        "id": "14",
         "title": "Online-Banking zeigt alten Kontostand",
         "description": (
             "Kontostand im Online-Banking bleibt für 24h stehen, trotz Buchungen. Cache-Problem im Frontend?"
@@ -197,7 +197,7 @@ DEMO_TICKETS: list[dict] = [
         "tags": ["online-banking", "cache"],
     },
     {
-        "id": "DEMO-0015",
+        "id": "15",
         "title": "Push-Benachrichtigungen kommen nicht an",
         "description": "Firebase-Token wird nicht mehr erneuert, Push kommt in der App nicht an.",
         "department": "Digital Channels",
@@ -208,7 +208,7 @@ DEMO_TICKETS: list[dict] = [
     },
     # -------------------------- Risk & Compliance --------------------------
     {
-        "id": "DEMO-0016",
+        "id": "16",
         "title": "KYC-Export für BaFin-Audit benötigt",
         "description": (
             "Compliance benötigt anonymisierten Export der KYC-Daten Q1/2026 für den anstehenden BaFin-Audit."
@@ -220,7 +220,7 @@ DEMO_TICKETS: list[dict] = [
         "tags": ["compliance", "kyc", "audit"],
     },
     {
-        "id": "DEMO-0017",
+        "id": "17",
         "title": "AML-Alert Engine übersieht Transaktionen",
         "description": (
             "Stichproben zeigen, dass die AML-Alert-Engine Transaktionen > 15k EUR "
@@ -234,7 +234,7 @@ DEMO_TICKETS: list[dict] = [
     },
     # -------------------------- Retail / Corporate --------------------------
     {
-        "id": "DEMO-0018",
+        "id": "18",
         "title": "Kunde will Tagesgeldkonto eröffnen",
         "description": (
             "Privatkunde fragt über Web-Formular nach Konditionen und Eröffnung eines Tagesgeldkontos."
@@ -246,7 +246,7 @@ DEMO_TICKETS: list[dict] = [
         "tags": ["retail", "tagesgeld"],
     },
     {
-        "id": "DEMO-0019",
+        "id": "19",
         "title": "Firmenkunde — Kreditrahmen erhöhen",
         "description": "Bestehender Corporate-Kunde bittet um Erhöhung des Betriebsmittelkredits um 250k EUR.",
         "department": "Corporate Banking",
@@ -256,7 +256,7 @@ DEMO_TICKETS: list[dict] = [
         "tags": ["corporate", "credit-line"],
     },
     {
-        "id": "DEMO-0020",
+        "id": "20",
         "title": "Baufinanzierung — Unterlagen unvollständig",
         "description": (
             "Bei Immobilienfinanzierung fehlen die letzten zwei Gehaltsabrechnungen "
