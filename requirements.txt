@@ -10,3 +10,4 @@ joblib
 litellm
 psycopg[binary]
 pyyaml
+slowapi

@@ -7,7 +7,9 @@ from app.infrastructure.ai.tfidf_similar_tickets import TfidfSimilarTicketsAdapt
 from app.infrastructure.config.settings import get_settings
 from app.infrastructure.logging.setup import configure_logging
 from app.infrastructure.persistence.db import Base, SessionLocal, engine, ensure_ticket_columns
+from app.interfaces.api.error_handlers import register_error_handlers
 from app.interfaces.api.middleware import ApiKeyMiddleware, RequestContextMiddleware
+from app.interfaces.api.rate_limit import install_rate_limiter
 from app.interfaces.api.routes.admin import router as admin_router
 from app.interfaces.api.routes.system import router as system_router
 from app.interfaces.api.routes.tickets import router as tickets_router
@@ -59,6 +61,9 @@ def create_app() -> FastAPI:
     except Exception:
         logger.exception("initial RAG index build failed — continuing without retrieval context")
     application.state.similar_tickets = similar_tickets
+
+    register_error_handlers(application)
+    install_rate_limiter(application)
 
     application.include_router(system_router)
     application.include_router(tickets_router)

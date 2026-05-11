@@ -1,9 +1,11 @@
+import logging
 from datetime import datetime
 from math import ceil
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from starlette.requests import Request as StarletteRequest
 
 from app.application.ports.similar_tickets_port import SimilarTicketsPort
 from app.application.use_cases.add_ticket_comment import AddTicketCommentUseCase
@@ -28,6 +30,7 @@ from app.interfaces.api.dependencies import (
     get_ticket_repository,
 )
 from app.interfaces.api.mappers.ticket_mapper import to_domain_ticket
+from app.interfaces.api.rate_limit import llm_rate_limit
 from app.interfaces.api.schemas.ticket_schemas import (
     DashboardAnalyticsResponse,
     PrioritizationResponse,
@@ -50,6 +53,8 @@ from app.interfaces.api.schemas.ticket_schemas import (
     TriageDecisionResponse,
     TriageResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
@@ -487,12 +492,14 @@ def triage_ticket(
 
 
 @router.post("/triage/llm", response_model=TriageResponse)
+@llm_rate_limit()
 def triage_ticket_with_llm(
-    request: TicketCreateRequest,
+    request: StarletteRequest,  # required by slowapi to identify the client
+    payload: TicketCreateRequest,
     repository: TicketRepositoryDep,
     similar_tickets: SimilarTicketsDep,
 ) -> TriageResponse:
-    ticket = to_domain_ticket(request)
+    ticket = to_domain_ticket(payload)
 
     try:
         use_case = TriageTicketUseCase(
@@ -502,7 +509,8 @@ def triage_ticket_with_llm(
         )
         result = use_case.execute(ticket)
     except Exception as error:
-        raise HTTPException(status_code=500, detail=str(error)) from error
+        logger.exception("LLM triage failed")
+        raise HTTPException(status_code=502, detail="LLM-backed triage is currently unavailable.") from error
 
     return TriageResponse(
         ticket_id=result.ticket_id,
@@ -516,16 +524,19 @@ def triage_ticket_with_llm(
 
 
 @router.post("/triage/llm/preview", response_model=TriageAnalysisResponse)
+@llm_rate_limit()
 def preview_ticket_with_llm(
-    request: TicketCreateRequest,
+    request: StarletteRequest,  # required by slowapi to identify the client
+    payload: TicketCreateRequest,
     similar_tickets: SimilarTicketsDep,
 ) -> TriageAnalysisResponse:
-    ticket = to_domain_ticket(request)
+    ticket = to_domain_ticket(payload)
 
     try:
         analysis = _build_rag_classifier(similar_tickets).analyze(ticket)
     except Exception as error:
-        raise HTTPException(status_code=500, detail=str(error)) from error
+        logger.exception("LLM preview failed")
+        raise HTTPException(status_code=502, detail="LLM-backed triage is currently unavailable.") from error
 
     prioritization = None
     try:

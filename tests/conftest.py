@@ -28,6 +28,10 @@ _TEST_DB_DIR = Path(tempfile.mkdtemp(prefix="triage-tests-"))
 _TEST_DB_PATH = _TEST_DB_DIR / "test.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB_PATH}"
 
+# Tests exercise the admin endpoints without a configured key. The gate
+# defaults to 503 in production; here we explicitly opt out.
+os.environ.setdefault("ADMIN_ALLOW_UNAUTHENTICATED", "1")
+
 
 def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
     if os.environ.get("KEEP_TEST_DB") == "1":

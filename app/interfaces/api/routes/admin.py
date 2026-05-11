@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,7 +11,7 @@ from app.application.use_cases.retrain_model import RetrainModelUseCase
 from app.infrastructure.ai.policy_based_prioritizer import PolicyBasedPrioritizer
 from app.infrastructure.ai.tfidf_similar_tickets import TfidfSimilarTicketsAdapter
 from app.infrastructure.seeding.demo_tickets import seed as seed_demo_tickets
-from app.interfaces.api.dependencies import get_similar_tickets
+from app.interfaces.api.dependencies import get_similar_tickets, require_admin_api_key
 from app.interfaces.api.schemas.admin_schemas import (
     BackfillPrioritizationResponse,
     RebuildRagResponse,
@@ -18,7 +19,16 @@ from app.interfaces.api.schemas.admin_schemas import (
     SeedDemoResponse,
 )
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+logger = logging.getLogger(__name__)
+
+# Every route on this router goes through ``require_admin_api_key``. The
+# dependency reads ADMIN_API_KEY from the environment per-request, so
+# tests can flip the gate by setting/unsetting the env var.
+router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=[Depends(require_admin_api_key)],
+)
 
 SimilarTicketsDep = Annotated[SimilarTicketsPort, Depends(get_similar_tickets)]
 
@@ -30,7 +40,8 @@ def retrain_model() -> RetrainResponse:
     try:
         model_path = use_case.execute()
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("retrain failed")
+        raise HTTPException(status_code=500, detail="Model retraining failed.") from exc
 
     return RetrainResponse(
         status="success",
@@ -50,7 +61,8 @@ def rebuild_rag_index(similar_tickets: SimilarTicketsDep) -> RebuildRagResponse:
     try:
         indexed = similar_tickets.rebuild()
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"rebuild failed: {exc}") from exc
+        logger.exception("RAG rebuild failed")
+        raise HTTPException(status_code=500, detail="Retrieval index rebuild failed.") from exc
 
     minimum = getattr(similar_tickets, "MIN_CORPUS_SIZE", TfidfSimilarTicketsAdapter.MIN_CORPUS_SIZE)
     if indexed < minimum:
@@ -108,7 +120,8 @@ def seed_demo_corpus(
             dedupe_non_demo=dedupe_non_demo,
         )
     except Exception as exc:  # pragma: no cover — surfaced as HTTP error
-        raise HTTPException(status_code=500, detail=f"seed failed: {exc}") from exc
+        logger.exception("seed-demo failed")
+        raise HTTPException(status_code=500, detail="Seeding the demo corpus failed.") from exc
 
     try:
         indexed = similar_tickets.rebuild()
@@ -162,7 +175,8 @@ def backfill_prioritization(
         )
         result = use_case.execute()
     except Exception as exc:  # pragma: no cover — surfaced as HTTP error
-        raise HTTPException(status_code=500, detail=f"backfill failed: {exc}") from exc
+        logger.exception("prioritization backfill failed")
+        raise HTTPException(status_code=500, detail="Prioritization backfill failed.") from exc
 
     return BackfillPrioritizationResponse(
         status="ok",
