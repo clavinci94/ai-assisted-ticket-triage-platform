@@ -5,6 +5,7 @@ import AssigneePicker from "../components/AssigneePicker";
 import Badge from "../components/Badge";
 import CommentComposer from "../components/CommentComposer";
 import MessageBanner from "../components/MessageBanner";
+import PrioritizationPanel from "../components/PrioritizationPanel";
 import SectionCard from "../components/SectionCard";
 import SlaBadge from "../components/SlaBadge";
 import * as ToastModule from "../components/ToastProvider";
@@ -255,6 +256,7 @@ function normalizeTicket(ticket) {
     updatedAt: pickFirst(ticket.updated_at, ticket.updatedAt, ticket.created_at),
     reviewDecision,
     reviewReason: pickFirst(ticket.decision?.review_comment),
+    prioritization: ticket.prioritization || ticket.analysis?.prioritization || null,
     events: Array.isArray(ticket.events) ? ticket.events.map(normalizeEvent) : [],
   };
 }
@@ -867,6 +869,12 @@ export default function TicketDetailPage() {
                   />
                 )}
               </SectionCard>
+
+              {ticket.prioritization ? (
+                <SectionCard title="KE-Priorisierung">
+                  <PrioritizationPanel prioritization={ticket.prioritization} variant="detail" />
+                </SectionCard>
+              ) : null}
 
               <SectionCard title="Status & SLA">
                 <form className="detail-form" onSubmit={handleStatusSubmit}>

@@ -28,6 +28,19 @@ class SimilarCaseResponse(BaseModel):
     final_category: str
     final_team: str | None = None
     similarity_score: float
+    effort_estimate_minutes: int | None = None
+
+
+class PrioritizationResponse(BaseModel):
+    impact_score: int = Field(..., ge=1, le=5)
+    urgency_score: int = Field(..., ge=1, le=5)
+    effort_estimate_minutes: int
+    solvability: str
+    composite_priority: float
+    auto_resolve_eligible: bool
+    runbook_url: str | None = None
+    rationale: str = ""
+    matched_rules: list[str] = Field(default_factory=list)
 
 
 class TriageAnalysisResponse(BaseModel):
@@ -43,6 +56,7 @@ class TriageAnalysisResponse(BaseModel):
     model_version: str
     analyzed_at: datetime | None = None
     similar_cases: list[SimilarCaseResponse] = Field(default_factory=list)
+    prioritization: PrioritizationResponse | None = None
 
 
 class TriageResponse(BaseModel):
@@ -52,6 +66,7 @@ class TriageResponse(BaseModel):
     final_category: str
     final_team: str
     ai_recommendation_used: bool
+    prioritization: PrioritizationResponse | None = None
 
 
 class TriageDecisionRequest(BaseModel):
@@ -164,6 +179,7 @@ class TicketRecordResponse(BaseModel):
     analysis: TriageAnalysisResponse | None = None
     decision: TriageDecisionResponse | None = None
     assignment: TicketAssignmentResponse | None = None
+    prioritization: PrioritizationResponse | None = None
     events: list[TicketEventResponse] = Field(default_factory=list)
 
 
@@ -184,6 +200,13 @@ class TicketListItemResponse(BaseModel):
     due_at: datetime | None = None
     tags: list[str] = Field(default_factory=list)
     sla_breached: bool = False
+    impact_score: int | None = None
+    urgency_score: int | None = None
+    effort_estimate_minutes: int | None = None
+    solvability: str | None = None
+    composite_priority: float | None = None
+    auto_resolve_eligible: bool | None = None
+    runbook_url: str | None = None
 
 
 class TicketListFacetsResponse(BaseModel):

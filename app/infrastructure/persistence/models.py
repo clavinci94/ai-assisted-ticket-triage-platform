@@ -45,6 +45,15 @@ class TicketRecordModel(Base):
     assigned_by = Column(String(100), nullable=True)
     assignment_note = Column(Text, nullable=True)
 
+    impact_score = Column(Integer, nullable=True)
+    urgency_score = Column(Integer, nullable=True)
+    effort_estimate_minutes = Column(Integer, nullable=True)
+    solvability = Column(String(50), nullable=True)
+    composite_priority = Column(Float, nullable=True)
+    auto_resolve_eligible = Column(Boolean, nullable=True)
+    runbook_url = Column(String(500), nullable=True)
+    prioritization_rationale = Column(Text, nullable=True)
+
     events = relationship(
         "TicketEventModel",
         back_populates="ticket",

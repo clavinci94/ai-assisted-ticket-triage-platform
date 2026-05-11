@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 from app.application.dto.ticket_record import TicketRecord
 from app.domain.entities.assignment import Assignment
+from app.domain.entities.prioritization import Prioritization
 from app.domain.entities.ticket import Ticket
 from app.domain.entities.ticket_event import TicketEvent
 from app.domain.entities.triage_analysis import TriageAnalysis
@@ -24,6 +25,14 @@ class TicketRepositoryPort(ABC):
 
     @abstractmethod
     def attach_decision(self, ticket_id: str, decision: TriageDecision) -> TicketRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    def attach_prioritization(
+        self,
+        ticket_id: str,
+        prioritization: Prioritization,
+    ) -> TicketRecord:
         raise NotImplementedError
 
     @abstractmethod

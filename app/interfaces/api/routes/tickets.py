@@ -19,6 +19,7 @@ from app.application.use_cases.update_ticket_status import UpdateTicketStatusUse
 from app.domain.entities.assignment import Assignment
 from app.domain.enums.ticket_status import TicketStatus
 from app.infrastructure.ai.ml_classifier import MLClassifier
+from app.infrastructure.ai.policy_based_prioritizer import PolicyBasedPrioritizer
 from app.infrastructure.ai.rag_assisted_classifier import RagAssistedClassifier
 from app.infrastructure.persistence.sqlite_ticket_repository import SQLiteTicketRepository
 from app.interfaces.api.dependencies import (
@@ -29,6 +30,7 @@ from app.interfaces.api.dependencies import (
 from app.interfaces.api.mappers.ticket_mapper import to_domain_ticket
 from app.interfaces.api.schemas.ticket_schemas import (
     DashboardAnalyticsResponse,
+    PrioritizationResponse,
     SimilarCaseResponse,
     TicketAssignmentRequest,
     TicketAssignmentResponse,
@@ -52,7 +54,7 @@ from app.interfaces.api.schemas.ticket_schemas import (
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
 
-def _to_analysis_response(analysis) -> TriageAnalysisResponse:
+def _to_analysis_response(analysis, prioritization=None) -> TriageAnalysisResponse:
     return TriageAnalysisResponse(
         predicted_category=analysis.predicted_category.value,
         category_confidence=analysis.category_confidence,
@@ -73,9 +75,27 @@ def _to_analysis_response(analysis) -> TriageAnalysisResponse:
                 final_category=case.final_category,
                 final_team=case.final_team,
                 similarity_score=case.similarity_score,
+                effort_estimate_minutes=getattr(case, "effort_estimate_minutes", None),
             )
             for case in getattr(analysis, "similar_cases", []) or []
         ],
+        prioritization=_to_prioritization_response(prioritization),
+    )
+
+
+def _to_prioritization_response(prioritization) -> PrioritizationResponse | None:
+    if prioritization is None:
+        return None
+    return PrioritizationResponse(
+        impact_score=prioritization.impact_score,
+        urgency_score=prioritization.urgency_score,
+        effort_estimate_minutes=prioritization.effort_estimate_minutes,
+        solvability=prioritization.solvability.value,
+        composite_priority=prioritization.composite_priority,
+        auto_resolve_eligible=prioritization.auto_resolve_eligible,
+        runbook_url=prioritization.runbook_url,
+        rationale=prioritization.rationale,
+        matched_rules=list(getattr(prioritization, "matched_rules", []) or []),
     )
 
 
@@ -155,9 +175,14 @@ def _to_event_response(event):
 
 
 def _to_ticket_record_response(record) -> TicketRecordResponse:
-    analysis = _to_analysis_response(record.analysis) if record.analysis else None
+    analysis = (
+        _to_analysis_response(record.analysis, getattr(record, "prioritization", None))
+        if record.analysis
+        else None
+    )
     decision = _to_decision_response(record.ticket.id, record.decision) if record.decision else None
     assignment = _to_assignment_response(record.ticket.id, record.assignment) if record.assignment else None
+    prioritization = _to_prioritization_response(getattr(record, "prioritization", None))
 
     return TicketRecordResponse(
         ticket_id=record.ticket.id,
@@ -177,6 +202,7 @@ def _to_ticket_record_response(record) -> TicketRecordResponse:
         analysis=analysis,
         decision=decision,
         assignment=assignment,
+        prioritization=prioritization,
         events=[_to_event_response(event) for event in record.events],
     )
 
@@ -266,6 +292,7 @@ def _record_tags(record) -> list[str]:
 
 
 def _to_ticket_list_item_response(record) -> TicketListItemResponse:
+    prioritization = getattr(record, "prioritization", None)
     return TicketListItemResponse(
         ticket_id=record.ticket.id,
         title=record.ticket.title,
@@ -283,6 +310,13 @@ def _to_ticket_list_item_response(record) -> TicketListItemResponse:
         due_at=record.ticket.due_at,
         tags=_record_tags(record),
         sla_breached=record.ticket.sla_breached,
+        impact_score=prioritization.impact_score if prioritization else None,
+        urgency_score=prioritization.urgency_score if prioritization else None,
+        effort_estimate_minutes=(prioritization.effort_estimate_minutes if prioritization else None),
+        solvability=prioritization.solvability.value if prioritization else None,
+        composite_priority=prioritization.composite_priority if prioritization else None,
+        auto_resolve_eligible=(prioritization.auto_resolve_eligible if prioritization else None),
+        runbook_url=prioritization.runbook_url if prioritization else None,
     )
 
 
@@ -392,6 +426,12 @@ def _ticket_sort_value(item: TicketListItemResponse, sort_by: str):
             "closed": 5,
         }.get(_normalize(item.status), 0)
 
+    if normalized_sort == "composite_priority":
+        return item.composite_priority if item.composite_priority is not None else -1.0
+
+    if normalized_sort == "effort_estimate_minutes":
+        return item.effort_estimate_minutes if item.effort_estimate_minutes is not None else 10**9
+
     if normalized_sort in {"created_at", "updated_at"}:
         return getattr(item, normalized_sort) or datetime.min
 
@@ -431,16 +471,18 @@ def triage_ticket(
     use_case = TriageTicketUseCase(
         classifier=MLClassifier(),
         repository=repository,
+        prioritizer=PolicyBasedPrioritizer(),
     )
     result = use_case.execute(ticket)
 
     return TriageResponse(
         ticket_id=result.ticket_id,
-        analysis=_to_analysis_response(result.analysis),
+        analysis=_to_analysis_response(result.analysis, result.prioritization),
         final_priority=result.final_priority.value,
         final_category=result.final_category.value,
         final_team=result.final_team,
         ai_recommendation_used=result.ai_recommendation_used,
+        prioritization=_to_prioritization_response(result.prioritization),
     )
 
 
@@ -456,6 +498,7 @@ def triage_ticket_with_llm(
         use_case = TriageTicketUseCase(
             classifier=_build_rag_classifier(similar_tickets),
             repository=repository,
+            prioritizer=PolicyBasedPrioritizer(),
         )
         result = use_case.execute(ticket)
     except Exception as error:
@@ -463,11 +506,12 @@ def triage_ticket_with_llm(
 
     return TriageResponse(
         ticket_id=result.ticket_id,
-        analysis=_to_analysis_response(result.analysis),
+        analysis=_to_analysis_response(result.analysis, result.prioritization),
         final_priority=result.final_priority.value,
         final_category=result.final_category.value,
         final_team=result.final_team,
         ai_recommendation_used=result.ai_recommendation_used,
+        prioritization=_to_prioritization_response(result.prioritization),
     )
 
 
@@ -483,7 +527,17 @@ def preview_ticket_with_llm(
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error)) from error
 
-    return _to_analysis_response(analysis)
+    prioritization = None
+    try:
+        prioritization = PolicyBasedPrioritizer().prioritize(
+            ticket,
+            analysis,
+            similar_cases=getattr(analysis, "similar_cases", None),
+        )
+    except Exception:  # pragma: no cover — best-effort
+        prioritization = None
+
+    return _to_analysis_response(analysis, prioritization=prioritization)
 
 
 @router.post("/decision", response_model=TriageDecisionResponse)

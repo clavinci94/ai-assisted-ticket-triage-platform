@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "../components/ToastProvider";
 import SectionCard from "../components/SectionCard";
 import SimilarCasesList from "../components/SimilarCasesList";
+import PrioritizationPanel from "../components/PrioritizationPanel";
 import { DEPARTMENTS } from "../../domain/constants/departments";
 import { previewTriageTicket, triageTicket } from "../../infrastructure/http/api";
 
@@ -320,6 +321,8 @@ export default function DashboardCreatePage() {
               <span>Priorität: {previewAnalysis.predicted_priority}</span>
               <span>Team: {previewAnalysis.suggested_team}</span>
             </div>
+
+            <PrioritizationPanel prioritization={previewAnalysis.prioritization} variant="modal" />
 
             <SimilarCasesList
               cases={previewAnalysis.similar_cases}

@@ -81,3 +81,35 @@ def ensure_ticket_columns() -> None:
         "sla_breached",
         "sla_breached BOOLEAN NOT NULL DEFAULT 0",
     )
+    _ensure_ticket_column(
+        "impact_score",
+        "impact_score INTEGER",
+    )
+    _ensure_ticket_column(
+        "urgency_score",
+        "urgency_score INTEGER",
+    )
+    _ensure_ticket_column(
+        "effort_estimate_minutes",
+        "effort_estimate_minutes INTEGER",
+    )
+    _ensure_ticket_column(
+        "solvability",
+        "solvability VARCHAR(50)",
+    )
+    _ensure_ticket_column(
+        "composite_priority",
+        "composite_priority FLOAT",
+    )
+    _ensure_ticket_column(
+        "auto_resolve_eligible",
+        "auto_resolve_eligible BOOLEAN",
+    )
+    _ensure_ticket_column(
+        "runbook_url",
+        "runbook_url VARCHAR(500)",
+    )
+    _ensure_ticket_column(
+        "prioritization_rationale",
+        "prioritization_rationale TEXT",
+    )

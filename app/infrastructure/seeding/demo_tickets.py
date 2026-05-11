@@ -50,6 +50,60 @@ _STATUS_RANK = {
     "new": 1,
 }
 
+# Default effort estimates (in minutes) per dominant tag. Used as ground
+# truth for seeded tickets so the RAG-based effort estimator has real
+# numbers to average over from day one. First match wins.
+_DEFAULT_EFFORT_BY_TAG: tuple[tuple[str, int], ...] = (
+    ("aml", 240),
+    ("compliance", 180),
+    ("audit", 240),
+    ("kyc", 150),
+    ("sanctions", 180),
+    ("swift", 90),
+    ("target2", 120),
+    ("sepa", 75),
+    ("payments", 90),
+    ("sct-inst", 90),
+    ("settlement", 120),
+    ("baufi", 180),
+    ("lending", 150),
+    ("corporate", 120),
+    ("credit-line", 150),
+    ("mobile-app", 90),
+    ("online-banking", 75),
+    ("apple-pay", 60),
+    ("vpn", 30),
+    ("citrix", 45),
+    ("wlan", 45),
+    ("mfa", 20),
+    ("password", 10),
+    ("access", 20),
+    ("fileshare", 20),
+    ("onboarding", 90),
+    ("printer", 30),
+    ("monitor", 30),
+    ("headset", 20),
+    ("hardware", 45),
+    ("sap", 60),
+    ("excel", 30),
+    ("hyperion", 60),
+    ("datev", 60),
+    ("retail", 30),
+    ("ec-karte", 15),
+    ("kreditkarte", 30),
+    ("wertpapier", 60),
+)
+
+
+def _effort_minutes_for(spec: dict) -> int:
+    if "effort_estimate_minutes" in spec:
+        return int(spec["effort_estimate_minutes"])
+    tag_set = {t.lower() for t in spec.get("tags", [])}
+    for tag, minutes in _DEFAULT_EFFORT_BY_TAG:
+        if tag in tag_set:
+            return minutes
+    return 60
+
 
 def _ts(days_ago: int) -> datetime:
     return datetime.now(UTC) - timedelta(days=days_ago)
@@ -1132,8 +1186,10 @@ def _serialize_tags(tags: list[str]) -> str | None:
     return json.dumps(tags)
 
 
-def _build_row(spec: dict, days_ago: int) -> TicketRecordModel:
-    return TicketRecordModel(
+def _build_row(spec: dict, days_ago: int, prioritizer=None) -> TicketRecordModel:
+    effort_minutes = _effort_minutes_for(spec)
+
+    row = TicketRecordModel(
         id=spec["id"],
         title=spec["title"],
         description=spec["description"],
@@ -1152,7 +1208,83 @@ def _build_row(spec: dict, days_ago: int) -> TicketRecordModel:
         accepted_ai_suggestion=True,
         reviewed_by="demo-operator",
         analyzed_at=_ts(days_ago),
+        effort_estimate_minutes=effort_minutes,
     )
+
+    if prioritizer is not None:
+        prio = _prioritize_spec(prioritizer, spec, effort_minutes)
+        row.impact_score = prio.impact_score
+        row.urgency_score = prio.urgency_score
+        # Keep our explicit per-spec effort — don't let the empty-neighbour
+        # fallback override it with the YAML default.
+        row.solvability = prio.solvability.value
+        row.composite_priority = prio.composite_priority
+        row.auto_resolve_eligible = prio.auto_resolve_eligible
+        row.runbook_url = prio.runbook_url
+        row.prioritization_rationale = prio.rationale
+
+    return row
+
+
+def _prioritize_spec(prioritizer, spec: dict, effort_minutes: int):
+    """Run the policy prioritizer with a synthetic Ticket/TriageAnalysis.
+
+    Seeded tickets bypass the triage use case (they go straight to
+    ``status=reviewed``), so the only way to give them KE prioritisation
+    is to call the prioritizer directly with the same domain shapes the
+    use case would build.
+    """
+
+    from app.domain.entities.ticket import Ticket
+    from app.domain.entities.triage_analysis import TriageAnalysis
+    from app.domain.enums.ticket_category import TicketCategory
+    from app.domain.enums.ticket_priority import TicketPriority
+    from app.domain.enums.ticket_status import TicketStatus
+
+    try:
+        category = TicketCategory(spec["final_category"])
+    except ValueError:
+        category = TicketCategory.UNKNOWN
+    try:
+        priority = TicketPriority(spec["final_priority"])
+    except ValueError:
+        priority = TicketPriority.MEDIUM
+
+    fake_ticket = Ticket(
+        id=spec["id"],
+        title=spec["title"],
+        description=spec["description"],
+        reporter="demo-seed",
+        source="internal",
+        department=spec["department"],
+        category=spec["final_category"],
+        priority=spec["final_priority"],
+        team=spec["final_team"],
+        assignee=None,
+        due_at=None,
+        tags=list(spec.get("tags", [])),
+        sla_breached=False,
+        status=TicketStatus.REVIEWED,
+        department_locked=True,
+    )
+    fake_analysis = TriageAnalysis(
+        predicted_category=category,
+        category_confidence=0.95,
+        predicted_priority=priority,
+        priority_confidence=0.95,
+        summary=spec["title"],
+        suggested_team=spec["final_team"],
+        suggested_department=spec["department"],
+        next_step="",
+        rationale="seeded",
+        model_version="seed",
+        similar_cases=[],
+    )
+    prio = prioritizer.prioritize(fake_ticket, fake_analysis, similar_cases=[])
+    # Replace the empty-neighbour fallback with our cluster-level effort.
+    from dataclasses import replace as dc_replace
+
+    return dc_replace(prio, effort_estimate_minutes=effort_minutes)
 
 
 def _delete_tickets(session, ticket_ids: list[str]) -> int:
@@ -1241,6 +1373,7 @@ def _insert_corpus(
     *,
     existing_ids: set[str],
     days_offset: int,
+    prioritizer=None,
 ) -> int:
     """Insert any catalog entries not yet present. Returns inserted count."""
 
@@ -1248,9 +1381,24 @@ def _insert_corpus(
     for offset, spec in enumerate(catalog):
         if spec["id"] in existing_ids:
             continue
-        session.add(_build_row(spec, days_ago=max(1, days_offset - offset)))
+        session.add(_build_row(spec, days_ago=max(1, days_offset - offset), prioritizer=prioritizer))
         inserted += 1
     return inserted
+
+
+def _build_policy_prioritizer():
+    """Best-effort instantiation. Returns None if the prioritizer fails to
+    load — seeded tickets keep their basic fields and the workbench
+    silently shows blank prioritisation cells."""
+
+    try:
+        from app.infrastructure.ai.policy_based_prioritizer import (
+            PolicyBasedPrioritizer,
+        )
+
+        return PolicyBasedPrioritizer()
+    except Exception:  # pragma: no cover — non-fatal
+        return None
 
 
 def seed(
@@ -1315,11 +1463,14 @@ def seed(
             .all()
         }
 
+        prioritizer = _build_policy_prioritizer()
+
         demo_inserted = _insert_corpus(
             session,
             DEMO_TICKETS,
             existing_ids=existing_ids,
             days_offset=30,
+            prioritizer=prioritizer,
         )
         # Historical tickets get older timestamps so the demo set still
         # looks like the "freshest" reviewed corpus on the workbench.
@@ -1328,6 +1479,7 @@ def seed(
             HISTORICAL_TICKETS,
             existing_ids=existing_ids,
             days_offset=180,
+            prioritizer=prioritizer,
         )
         session.commit()
     finally:

@@ -104,6 +104,7 @@ class TfidfSimilarTicketsAdapter(SimilarTicketsPort):
                     final_category=base.final_category,
                     final_team=base.final_team,
                     similarity_score=round(similarity, 4),
+                    effort_estimate_minutes=base.effort_estimate_minutes,
                 )
             )
         return results
@@ -177,4 +178,5 @@ class TfidfSimilarTicketsAdapter(SimilarTicketsPort):
             final_category=row.final_category or row.category or "unknown",
             final_team=row.final_team or row.team,
             similarity_score=0.0,  # populated per-query in find_similar
+            effort_estimate_minutes=row.effort_estimate_minutes,
         )

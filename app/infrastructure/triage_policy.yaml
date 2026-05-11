@@ -1,0 +1,158 @@
+# Knowledge-engineered triage policy.
+#
+# Rules are evaluated top to bottom. Multiple rules can match a single
+# ticket; later rules override earlier values. The first match that sets
+# a runbook_url wins. Match criteria are ANDed within a rule and ORed
+# inside a list.
+#
+# Confidence threshold for auto-resolve: if a rule sets
+# solvability=self-service AND the classifier's category_confidence is
+# >= self_service_confidence_threshold, the ticket is flagged
+# auto_resolve_eligible and the runbook_url is surfaced to the user.
+
+self_service_confidence_threshold: 0.6
+
+# Effort fallback if no RAG neighbours exist for the ticket.
+default_effort_minutes: 60
+
+rules:
+  # ----- Compliance / regulatory: highest impact, no self-service -----
+  - id: aml-critical
+    match:
+      tags_any: [aml, sanctions, kyc, compliance]
+    set:
+      impact_score: 5
+      urgency_score: 5
+      solvability: specialist
+      rationale: "Compliance-/AML-Vorgang — regulatorisches Risiko, sofortige Eskalation."
+
+  - id: bafin-finma-audit
+    match:
+      tags_any: [bafin, finma, audit, marisk]
+    set:
+      impact_score: 5
+      urgency_score: 4
+      solvability: l2
+      rationale: "Audit-/Aufsichts-Verfahren — fixe Fristen, Spezialist nötig."
+
+  # ----- Production outages / customer-facing failures -----
+  - id: payments-critical
+    match:
+      department: "Payments Operations"
+      tags_any: [swift, target2, sct-inst, settlement, sepa]
+    set:
+      impact_score: 5
+      urgency_score: 5
+      solvability: l2
+      rationale: "Zahlungsverkehrs-Störung — direkter Kundenimpact, Settlement-relevant."
+
+  - id: mobile-app-outage
+    match:
+      department: "Digital Channels"
+      tags_any: [mobile-app, online-banking]
+      ai_priority_any: [critical, high]
+    set:
+      impact_score: 5
+      urgency_score: 4
+      solvability: l2
+      rationale: "Digital-Channel-Outage — viele Endkunden betroffen."
+
+  # ----- VPN / network: high urgency, mid effort -----
+  - id: vpn-blocking
+    match:
+      tags_any: [vpn, citrix]
+    set:
+      impact_score: 3
+      urgency_score: 4
+      solvability: l1
+      runbook_url: "https://kb.example.com/runbooks/vpn-citrix-troubleshoot"
+      rationale: "VPN-Vorgang — blockiert Arbeitsfähigkeit, Standard-Runbook vorhanden."
+
+  - id: mfa-token
+    match:
+      tags_any: [mfa, authenticator]
+    set:
+      impact_score: 4
+      urgency_score: 5
+      solvability: l1
+      runbook_url: "https://kb.example.com/runbooks/mfa-rebind"
+      rationale: "MFA-Sperre — User komplett ausgeschlossen, Standard-Reset durch Service-Desk."
+
+  # ----- Self-service candidates: high solvability -----
+  - id: password-self-service
+    match:
+      tags_any: [password]
+      title_any: [passwort, reset, lockout]
+    set:
+      impact_score: 2
+      urgency_score: 3
+      solvability: self-service
+      runbook_url: "https://selfservice.example.com/password-reset"
+      rationale: "Passwort-/Account-Reset — über Self-Service-Portal abdeckbar."
+
+  - id: access-fileshare-self-service
+    match:
+      tags_any: [access, fileshare]
+    set:
+      impact_score: 2
+      urgency_score: 2
+      solvability: self-service
+      runbook_url: "https://kb.example.com/runbooks/access-request"
+      rationale: "Berechtigungs-Anfrage — Self-Service via Access-Request-Workflow."
+
+  - id: onboarding
+    match:
+      tags_any: [onboarding]
+    set:
+      impact_score: 3
+      urgency_score: 2
+      solvability: l1
+      runbook_url: "https://kb.example.com/runbooks/employee-onboarding"
+      rationale: "Onboarding — Standard-Checkliste, Vorlauf vorhanden."
+
+  # ----- Hardware: predictable effort, L1 -----
+  - id: hardware-standard
+    match:
+      tags_any: [hardware, printer, monitor, headset, laptop]
+    set:
+      impact_score: 2
+      urgency_score: 2
+      solvability: l1
+      rationale: "Hardware-Vorgang — Standard-Diagnose / Austausch durch Vor-Ort-Team."
+
+  # ----- Lending / Corporate / Retail business cases -----
+  - id: lending-volume
+    match:
+      department: "Lending Services"
+    set:
+      impact_score: 3
+      urgency_score: 3
+      solvability: l2
+      rationale: "Kreditvorgang — fachlich, Vertriebs-/Risiko-Vote nötig."
+
+  - id: corporate-request
+    match:
+      department: "Corporate Banking"
+    set:
+      impact_score: 3
+      urgency_score: 2
+      solvability: l2
+      rationale: "Corporate-Anfrage — Relationship-Manager bearbeitet."
+
+  - id: retail-question
+    match:
+      department: "Retail Banking"
+      ai_category_any: [question]
+    set:
+      impact_score: 1
+      urgency_score: 1
+      solvability: self-service
+      runbook_url: "https://www.example.com/produkte"
+      rationale: "Produktanfrage Privatkunde — über Web-Produkt-Seite + Hotline abdeckbar."
+
+# Fallback applied if no rule matches. Conservative middle values, L2 fallback.
+default:
+  impact_score: 3
+  urgency_score: 3
+  solvability: l2
+  rationale: "Keine spezifische Policy-Regel angewendet — Default-Eskalation an L2."

@@ -205,6 +205,82 @@ kbd,
 .pill-cat-question { background: #fff4de; color: #8a6100; }
 .pill-cat-unknown { background: #f2f3f5; color: #6c707a; }
 
+.solvability-self-service { background: #daf4e6; color: #1a6b42; }
+.solvability-l1 { background: #e8f0ff; color: #1e4fb8; }
+.solvability-l2 { background: #fff0d6; color: #9a5a00; }
+.solvability-specialist { background: #fde9e9; color: #b33b3f; }
+
+.prioritization-panel {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid #e2e4e8;
+  border-radius: 10px;
+  background: #fafbfc;
+}
+.prioritization-panel .eyebrow {
+  margin: 0 0 10px 0;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6c707a;
+}
+.prioritization-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 10px;
+}
+.prioritization-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #ececee;
+}
+.prioritization-label {
+  font-size: 11px;
+  color: #6c707a;
+}
+.prioritization-value {
+  font-size: 16px;
+  color: var(--text-primary);
+}
+.prioritization-auto-resolve {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff8e1;
+  border: 1px solid #f4d77a;
+  color: #5a4200;
+  font-size: 13px;
+}
+.prioritization-auto-resolve a { color: #5a4200; text-decoration: underline; }
+.prioritization-runbook {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #4f545c;
+}
+.prioritization-runbook a { color: #1e4fb8; }
+.prioritization-rationale {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #4f545c;
+}
+.prioritization-rules {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #6c707a;
+}
+.prioritization-rules code {
+  background: #ececee;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+.prioritization-panel-modal { margin-top: 12px; }
+.prioritization-panel-detail { margin-top: 0; }
+
 /* Priority dot — colored 6px circle inline with label, no pill. */
 .prio-dot {
   display: inline-flex;

@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 from app.application.dto.triage_result import TriageResult
 from app.application.ports.classifier_port import ClassifierPort
+from app.application.ports.prioritization_port import PrioritizationPort
 from app.application.ports.ticket_repository_port import TicketRepositoryPort
 from app.domain.entities.ticket import Ticket
 from app.domain.enums.ticket_status import TicketStatus
@@ -14,9 +15,11 @@ class TriageTicketUseCase:
         self,
         classifier: ClassifierPort,
         repository: TicketRepositoryPort,
+        prioritizer: PrioritizationPort | None = None,
     ) -> None:
         self.classifier = classifier
         self.repository = repository
+        self.prioritizer = prioritizer
 
     def execute(self, ticket: Ticket) -> TriageResult:
         self.repository.create_ticket(ticket)
@@ -42,6 +45,18 @@ class TriageTicketUseCase:
 
         final_priority = apply_priority_rules(ticket, analysis.predicted_priority)
 
+        prioritization = None
+        if self.prioritizer is not None:
+            try:
+                prioritization = self.prioritizer.prioritize(
+                    ticket,
+                    analysis,
+                    similar_cases=analysis.similar_cases,
+                )
+                self.repository.attach_prioritization(ticket.id, prioritization)
+            except Exception:  # pragma: no cover — prioritisation is best-effort
+                prioritization = None
+
         return TriageResult(
             ticket_id=ticket.id,
             analysis=analysis,
@@ -49,4 +64,5 @@ class TriageTicketUseCase:
             final_category=analysis.predicted_category,
             final_team=analysis.suggested_team,
             ai_recommendation_used=(final_priority == analysis.predicted_priority),
+            prioritization=prioritization,
         )

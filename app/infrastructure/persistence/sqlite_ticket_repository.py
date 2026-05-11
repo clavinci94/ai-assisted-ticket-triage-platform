@@ -6,10 +6,12 @@ from sqlalchemy.orm import Session
 from app.application.dto.ticket_record import TicketRecord
 from app.application.ports.ticket_repository_port import TicketRepositoryPort
 from app.domain.entities.assignment import Assignment
+from app.domain.entities.prioritization import Prioritization
 from app.domain.entities.ticket import Ticket
 from app.domain.entities.ticket_event import TicketEvent
 from app.domain.entities.triage_analysis import TriageAnalysis
 from app.domain.entities.triage_decision import TriageDecision
+from app.domain.enums.solvability_level import SolvabilityLevel
 from app.domain.enums.ticket_category import TicketCategory
 from app.domain.enums.ticket_priority import TicketPriority
 from app.domain.enums.ticket_status import TicketStatus
@@ -120,6 +122,24 @@ class SQLiteTicketRepository(TicketRepositoryPort):
             ),
         )
 
+        return self.get_ticket(ticket_id)
+
+    def attach_prioritization(
+        self,
+        ticket_id: str,
+        prioritization: Prioritization,
+    ) -> TicketRecord:
+        db_record = self._get_db_record(ticket_id)
+        db_record.impact_score = prioritization.impact_score
+        db_record.urgency_score = prioritization.urgency_score
+        db_record.effort_estimate_minutes = prioritization.effort_estimate_minutes
+        db_record.solvability = prioritization.solvability.value
+        db_record.composite_priority = prioritization.composite_priority
+        db_record.auto_resolve_eligible = prioritization.auto_resolve_eligible
+        db_record.runbook_url = prioritization.runbook_url
+        db_record.prioritization_rationale = prioritization.rationale
+        self.session.commit()
+        self.session.refresh(db_record)
         return self.get_ticket(ticket_id)
 
     def attach_assignment(self, ticket_id: str, assignment: Assignment) -> TicketRecord:
@@ -364,6 +384,27 @@ class SQLiteTicketRepository(TicketRepositoryPort):
                 assignment_note=db_record.assignment_note,
             )
 
+        prioritization = None
+        if db_record.impact_score is not None and db_record.urgency_score is not None:
+            try:
+                solvability_level = SolvabilityLevel(db_record.solvability or "l2")
+            except ValueError:
+                solvability_level = SolvabilityLevel.L2
+            prioritization = Prioritization(
+                impact_score=int(db_record.impact_score),
+                urgency_score=int(db_record.urgency_score),
+                effort_estimate_minutes=int(db_record.effort_estimate_minutes or 0),
+                solvability=solvability_level,
+                composite_priority=float(
+                    db_record.composite_priority
+                    if db_record.composite_priority is not None
+                    else db_record.impact_score * db_record.urgency_score
+                ),
+                auto_resolve_eligible=bool(db_record.auto_resolve_eligible),
+                runbook_url=db_record.runbook_url,
+                rationale=db_record.prioritization_rationale or "",
+            )
+
         events = [self._to_event(event) for event in db_record.events]
 
         return TicketRecord(
@@ -371,5 +412,6 @@ class SQLiteTicketRepository(TicketRepositoryPort):
             analysis=analysis,
             decision=decision,
             assignment=assignment,
+            prioritization=prioritization,
             events=events,
         )

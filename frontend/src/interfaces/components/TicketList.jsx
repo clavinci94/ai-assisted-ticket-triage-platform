@@ -57,6 +57,63 @@ function PriorityCell({ value }) {
   );
 }
 
+function CompositePriorityCell({ ticket }) {
+  const value = ticket.composite_priority;
+  if (value === null || value === undefined) return <span className="cell-muted">—</span>;
+  const impact = ticket.impact_score;
+  const urgency = ticket.urgency_score;
+  const score = Math.round(Number(value));
+  let tone = "prio-low";
+  if (score >= 20) tone = "prio-critical";
+  else if (score >= 12) tone = "prio-high";
+  else if (score >= 6) tone = "prio-medium";
+  return (
+    <span
+      className={`prio-dot ${tone}`}
+      title={`Impact ${impact ?? "?"} × Urgenz ${urgency ?? "?"} = ${score}`}
+    >
+      <span className="tabular-nums">{score}</span>
+    </span>
+  );
+}
+
+function EffortCell({ value }) {
+  if (value === null || value === undefined) return <span className="cell-muted">—</span>;
+  const minutes = Math.max(0, Number(value));
+  if (Number.isNaN(minutes)) return <span className="cell-muted">—</span>;
+  if (minutes < 60) {
+    return <span className="cell-time tabular-nums">{minutes} min</span>;
+  }
+  const h = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return (
+    <span className="cell-time tabular-nums">
+      {h}h{rest ? ` ${rest}m` : ""}
+    </span>
+  );
+}
+
+function SolvabilityCell({ ticket }) {
+  const value = ticket.solvability;
+  if (!value) return <span className="cell-muted">—</span>;
+  const tone = `solvability-${normalizeValue(value).replace(/[^a-z0-9]+/g, "-")}`;
+  const labels = {
+    "self-service": "Self-Service",
+    l1: "L1",
+    l2: "L2",
+    specialist: "Spezialist",
+  };
+  return (
+    <span
+      className={`pill ${tone}`}
+      title={ticket.auto_resolve_eligible ? "Auto-Resolve-fähig (Self-Service + hohe Confidence)" : ""}
+    >
+      {labels[normalizeValue(value)] || value}
+      {ticket.auto_resolve_eligible ? " ⚡" : ""}
+    </span>
+  );
+}
+
 function CompactTicketList({ tickets, loading, selectedTicketId }) {
   if (loading) return <p>Tickets werden geladen...</p>;
   if (!tickets.length) return <p>Keine Tickets gefunden.</p>;
@@ -129,6 +186,18 @@ function renderCell(ticket, columnKey) {
 
   if (columnKey === "priority") {
     return <PriorityCell value={ticket.priority} />;
+  }
+
+  if (columnKey === "composite_priority") {
+    return <CompositePriorityCell ticket={ticket} />;
+  }
+
+  if (columnKey === "effort_estimate_minutes") {
+    return <EffortCell value={ticket.effort_estimate_minutes} />;
+  }
+
+  if (columnKey === "solvability") {
+    return <SolvabilityCell ticket={ticket} />;
   }
 
   if (columnKey === "team") {

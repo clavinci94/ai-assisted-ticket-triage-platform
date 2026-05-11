@@ -20,3 +20,4 @@ class SimilarCase:
     final_category: str
     final_team: str | None
     similarity_score: float  # cosine similarity, 0.0–1.0
+    effort_estimate_minutes: int | None = None  # observed effort, fuel for averaging
