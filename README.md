@@ -200,12 +200,22 @@ The frontend uses the backend on `http://127.0.0.1:8000` by default. Override wi
 
 ### Seed demo data
 
-For an empty database, seed ~20 realistic reviewed tickets so the retrieval layer has something to work with:
+Populate the database with the curated demo showcase (20 `DEMO-*` tickets) plus a richer
+historical corpus (60 `HIST-*` tickets across VPN, payments, mobile, compliance, lending …)
+so retrieval has something meaningful to match against. The seeder also purges known
+pytest fixtures (`WB-PAGE-CLAUDIO*`, `Workflow * Test`, …) and deduplicates non-seed rows
+with the same title — both default on.
 
 ```bash
-.venv/bin/python scripts/seed_demo_tickets.py            # add, skip duplicates
-.venv/bin/python scripts/seed_demo_tickets.py --replace  # wipe DEMO-* first
-curl -X POST http://127.0.0.1:8000/admin/rebuild-rag     # rebuild retrieval index
+.venv/bin/python scripts/seed_demo_tickets.py            # idempotent: adds missing rows
+.venv/bin/python scripts/seed_demo_tickets.py --replace  # wipe DEMO-* + HIST-* and reseed
+```
+
+On a cloud deploy (Render), call the equivalent admin endpoint instead — same defaults,
+also rebuilds the RAG index in one shot:
+
+```bash
+curl -X POST https://<your-api>.onrender.com/admin/seed-demo
 ```
 
 ---

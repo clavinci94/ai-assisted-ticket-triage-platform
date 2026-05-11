@@ -71,16 +71,37 @@ def seed_demo_corpus(
         default=True,
         description="Delete existing DEMO-* rows before inserting. Default true so the endpoint is idempotent.",
     ),
+    purge_test_pollution: bool = Query(
+        default=True,
+        description=(
+            "Delete rows whose title matches a known pytest fixture prefix "
+            "(WB-PAGE-CLAUDIO, WB-VIEWS-CLAUDIO, Workflow * Test)."
+        ),
+    ),
+    dedupe_non_demo: bool = Query(
+        default=True,
+        description=(
+            "Keep only one row per title for non-demo tickets (e.g. dozens of "
+            "duplicated 'Password reset request' rows from past manual tests)."
+        ),
+    ),
 ) -> SeedDemoResponse:
-    """Populate the database with ~20 reviewed demo tickets for the RAG demo.
+    """Populate the database with the curated demo ticket corpus for the RAG demo.
 
     Safe to call repeatedly: with ``replace=true`` (default) it wipes any
     existing DEMO-* rows before reinserting, so you always end up with the
-    canonical catalog. Rebuilds the retrieval index afterwards so the next
+    canonical catalog. With ``purge_test_pollution`` and ``dedupe_non_demo``
+    (also defaulting on) it additionally cleans up test fixtures and duplicate
+    titles that may have leaked into the DB from past pytest runs or manual
+    triage attempts. Rebuilds the retrieval index afterwards so the next
     triage request sees the new corpus immediately.
     """
     try:
-        result = seed_demo_tickets(replace=replace)
+        result = seed_demo_tickets(
+            replace=replace,
+            purge_test_pollution=purge_test_pollution,
+            dedupe_non_demo=dedupe_non_demo,
+        )
     except Exception as exc:  # pragma: no cover — surfaced as HTTP error
         raise HTTPException(status_code=500, detail=f"seed failed: {exc}") from exc
 
@@ -93,12 +114,20 @@ def seed_demo_corpus(
         status=result["status"],
         deleted=result["deleted"],
         inserted=result["inserted"],
+        inserted_demo=result.get("inserted_demo", 0),
+        inserted_historical=result.get("inserted_historical", 0),
+        purged_test_pollution=result.get("purged_test_pollution", 0),
+        deduplicated=result.get("deduplicated", 0),
         skipped_existing=result["skipped_existing"],
         total_demo_records=result["total_demo_records"],
+        total_historical_records=result.get("total_historical_records", 0),
         indexed_tickets=indexed,
         message=(
-            f"Seeded {result['inserted']} demo tickets "
-            f"(removed {result['deleted']}, skipped {result['skipped_existing']}). "
+            f"Seeded {result.get('inserted_demo', 0)} demo + "
+            f"{result.get('inserted_historical', 0)} historical tickets "
+            f"(removed {result['deleted']}, skipped {result['skipped_existing']}, "
+            f"purged {result.get('purged_test_pollution', 0)} test-fixture rows, "
+            f"deduped {result.get('deduplicated', 0)} non-seed duplicates). "
             f"RAG index now holds {indexed if indexed is not None else 'n/a'} reviewed tickets."
         ),
     )
