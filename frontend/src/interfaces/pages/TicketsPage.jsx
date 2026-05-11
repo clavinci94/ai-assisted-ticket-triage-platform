@@ -63,7 +63,17 @@ export default function TicketsPage({ initialView = "all" }) {
   const [savedViews] = useState(() => loadStoredJson(SAVED_VIEWS_STORAGE_KEY, []));
   const [visibleColumns] = useState(() => {
     const storedColumns = loadStoredJson(COLUMN_VISIBILITY_STORAGE_KEY, DEFAULT_VISIBLE_COLUMNS);
-    return Array.isArray(storedColumns) && storedColumns.length ? storedColumns : DEFAULT_VISIBLE_COLUMNS;
+    if (!Array.isArray(storedColumns) || !storedColumns.length) {
+      return DEFAULT_VISIBLE_COLUMNS;
+    }
+    // Forward-merge any newly introduced default columns so returning users
+    // automatically pick up new fields (e.g. KE-prio) without losing their
+    // customizations.
+    const merged = [...storedColumns];
+    for (const key of DEFAULT_VISIBLE_COLUMNS) {
+      if (!merged.includes(key)) merged.push(key);
+    }
+    return merged;
   });
 
   const activeView = getWorkbenchView(initialView);
