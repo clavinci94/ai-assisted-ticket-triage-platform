@@ -3,11 +3,16 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.application.ports.similar_tickets_port import SimilarTicketsPort
+from app.application.use_cases.backfill_prioritization import (
+    BackfillPrioritizationUseCase,
+)
 from app.application.use_cases.retrain_model import RetrainModelUseCase
+from app.infrastructure.ai.policy_based_prioritizer import PolicyBasedPrioritizer
 from app.infrastructure.ai.tfidf_similar_tickets import TfidfSimilarTicketsAdapter
 from app.infrastructure.seeding.demo_tickets import seed as seed_demo_tickets
 from app.interfaces.api.dependencies import get_similar_tickets
 from app.interfaces.api.schemas.admin_schemas import (
+    BackfillPrioritizationResponse,
     RebuildRagResponse,
     RetrainResponse,
     SeedDemoResponse,
@@ -129,5 +134,44 @@ def seed_demo_corpus(
             f"purged {result.get('purged_test_pollution', 0)} test-fixture rows, "
             f"deduped {result.get('deduplicated', 0)} non-seed duplicates). "
             f"RAG index now holds {indexed if indexed is not None else 'n/a'} reviewed tickets."
+        ),
+    )
+
+
+@router.post(
+    "/backfill-prioritization",
+    response_model=BackfillPrioritizationResponse,
+)
+def backfill_prioritization(
+    similar_tickets: SimilarTicketsDep,
+) -> BackfillPrioritizationResponse:
+    """Run the KE prioritizer over every ticket that lacks impact_score.
+
+    Pre-existing tickets created before the KE layer was introduced have
+    NULL prioritisation columns and therefore show blank cells in the
+    workbench. This endpoint synthesises the inputs the prioritizer
+    needs from each row's existing classification fields and persists
+    a fresh ``Prioritization`` for every affected ticket. Idempotent —
+    tickets that already have ``impact_score`` are skipped.
+    """
+
+    try:
+        use_case = BackfillPrioritizationUseCase(
+            prioritizer=PolicyBasedPrioritizer(),
+            similar_tickets=similar_tickets,
+        )
+        result = use_case.execute()
+    except Exception as exc:  # pragma: no cover — surfaced as HTTP error
+        raise HTTPException(status_code=500, detail=f"backfill failed: {exc}") from exc
+
+    return BackfillPrioritizationResponse(
+        status="ok",
+        candidates=result.candidates,
+        prioritized=result.prioritized,
+        skipped=result.skipped,
+        failed=result.failed,
+        message=(
+            f"Backfilled {result.prioritized} of {result.candidates} tickets "
+            f"({result.failed} failed, {result.skipped} skipped)."
         ),
     )

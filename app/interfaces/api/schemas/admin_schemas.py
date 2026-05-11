@@ -27,3 +27,12 @@ class SeedDemoResponse(BaseModel):
     total_historical_records: int = 0
     indexed_tickets: int | None = None
     message: str
+
+
+class BackfillPrioritizationResponse(BaseModel):
+    status: str
+    candidates: int
+    prioritized: int
+    skipped: int
+    failed: int
+    message: str
