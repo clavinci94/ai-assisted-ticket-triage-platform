@@ -41,7 +41,19 @@ class BackfillPrioritizationUseCase:
         self.prioritizer = prioritizer
         self.similar_tickets = similar_tickets
 
-    def execute(self) -> BackfillResult:
+    def execute(self, force: bool = False) -> BackfillResult:
+        """Score every candidate.
+
+        ``force=False`` (default) only touches rows where
+        ``impact_score IS NULL`` — the idempotent backfill mode that
+        leaves already-scored tickets alone.
+
+        ``force=True`` re-scores every ticket regardless of its current
+        prioritisation. Use this after editing
+        ``triage_policy.yaml`` so the change rolls out to existing
+        tickets instead of only future ones.
+        """
+
         candidates = 0
         prioritized = 0
         skipped = 0
@@ -49,7 +61,10 @@ class BackfillPrioritizationUseCase:
 
         session = SessionLocal()
         try:
-            rows = session.query(TicketRecordModel).filter(TicketRecordModel.impact_score.is_(None)).all()
+            base_query = session.query(TicketRecordModel)
+            if not force:
+                base_query = base_query.filter(TicketRecordModel.impact_score.is_(None))
+            rows = base_query.all()
             candidates = len(rows)
             repo = SQLiteTicketRepository(session)
 

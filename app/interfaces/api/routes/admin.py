@@ -160,15 +160,26 @@ def seed_demo_corpus(
 )
 def backfill_prioritization(
     similar_tickets: SimilarTicketsDep,
+    force: bool = Query(
+        default=False,
+        description=(
+            "If true, re-score every ticket regardless of its current "
+            "prioritisation. Use after editing triage_policy.yaml to roll "
+            "the new rules over existing tickets. Defaults to false — "
+            "idempotent backfill mode that only touches NULL rows."
+        ),
+    ),
 ) -> BackfillPrioritizationResponse:
-    """Run the KE prioritizer over every ticket that lacks impact_score.
+    """Run the KE prioritizer over tickets that need scoring.
 
-    Pre-existing tickets created before the KE layer was introduced have
-    NULL prioritisation columns and therefore show blank cells in the
-    workbench. This endpoint synthesises the inputs the prioritizer
-    needs from each row's existing classification fields and persists
-    a fresh ``Prioritization`` for every affected ticket. Idempotent —
-    tickets that already have ``impact_score`` are skipped.
+    Default mode (``force=false``): synthesises inputs from each row's
+    existing classification fields and persists a fresh
+    ``Prioritization`` for every ticket where ``impact_score IS NULL``.
+    Idempotent — already-scored tickets are skipped.
+
+    Force mode (``force=true``): re-scores every ticket in the table
+    against the *current* policy. Used after a policy change so existing
+    tickets pick up the new rule set.
     """
 
     try:
@@ -176,7 +187,7 @@ def backfill_prioritization(
             prioritizer=PolicyBasedPrioritizer(),
             similar_tickets=similar_tickets,
         )
-        result = use_case.execute()
+        result = use_case.execute(force=force)
     except Exception as exc:  # pragma: no cover — surfaced as HTTP error
         logger.exception("prioritization backfill failed")
         raise HTTPException(status_code=500, detail="Prioritization backfill failed.") from exc
