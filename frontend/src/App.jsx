@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
 import {
@@ -12,18 +12,30 @@ import {
 } from "./interfaces/components/Icon";
 import { PageHeadingProvider, usePageHeading } from "./interfaces/components/PageHeadingContext";
 import { ToastProvider } from "./interfaces/components/ToastProvider";
-import DashboardCreatePage from "./interfaces/pages/DashboardCreatePage";
-import DashboardDepartmentsPage from "./interfaces/pages/DashboardDepartmentsPage";
-import DashboardKpisPage from "./interfaces/pages/DashboardKpisPage";
+// Eager imports for the high-traffic top-level pages so the initial paint
+// doesn't wait on a second bundle. Detail and analytics pages — bigger
+// dependency footprint (Recharts, ticket-detail tabs) — are lazy-loaded
+// to keep the entry chunk small.
 import DashboardLandingPage from "./interfaces/pages/DashboardLandingPage";
 import DashboardPage from "./interfaces/pages/DashboardPage";
-import ReportsPage from "./interfaces/pages/ReportsPage";
-import SettingsPage from "./interfaces/pages/SettingsPage";
-import SlaPage from "./interfaces/pages/SlaPage";
-import TeamsPage from "./interfaces/pages/TeamsPage";
-import TicketDetailPage from "./interfaces/pages/TicketDetailPage";
 import TicketsPage from "./interfaces/pages/TicketsPage";
+
+const DashboardCreatePage = lazy(() => import("./interfaces/pages/DashboardCreatePage"));
+const DashboardDepartmentsPage = lazy(() => import("./interfaces/pages/DashboardDepartmentsPage"));
+const DashboardKpisPage = lazy(() => import("./interfaces/pages/DashboardKpisPage"));
+const ReportsPage = lazy(() => import("./interfaces/pages/ReportsPage"));
+const SettingsPage = lazy(() => import("./interfaces/pages/SettingsPage"));
+const SlaPage = lazy(() => import("./interfaces/pages/SlaPage"));
+const TeamsPage = lazy(() => import("./interfaces/pages/TeamsPage"));
+const TicketDetailPage = lazy(() => import("./interfaces/pages/TicketDetailPage"));
+
 import { getOperatorInitials, loadUserSettings } from "./infrastructure/storage/userSettingsStore";
+
+const LAZY_FALLBACK = (
+  <div className="lazy-fallback" role="status" aria-live="polite">
+    Wird geladen…
+  </div>
+);
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Übersicht", end: true, Icon: HomeIcon },
@@ -177,24 +189,26 @@ function AppLayout() {
       <div className="app-main">
         <AppTopbar />
         <main className="app-content">
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/dashboard/create" element={<DashboardCreatePage />} />
-            <Route path="/tickets" element={<TicketsPage initialView="all" />} />
-            <Route path="/tickets/mine" element={<TicketsPage initialView="mine" />} />
-            <Route path="/tickets/open" element={<TicketsPage initialView="open" />} />
-            <Route path="/tickets/escalations" element={<TicketsPage initialView="escalations" />} />
-            <Route path="/tickets/:ticketId" element={<TicketDetailPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/reports/kpis" element={<DashboardKpisPage />} />
-            <Route path="/reports/departments" element={<DashboardDepartmentsPage />} />
-            <Route path="/reports/teams" element={<TeamsPage />} />
-            <Route path="/reports/sla" element={<SlaPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/help" element={<DashboardLandingPage />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
+          <Suspense fallback={LAZY_FALLBACK}>
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/dashboard/create" element={<DashboardCreatePage />} />
+              <Route path="/tickets" element={<TicketsPage initialView="all" />} />
+              <Route path="/tickets/mine" element={<TicketsPage initialView="mine" />} />
+              <Route path="/tickets/open" element={<TicketsPage initialView="open" />} />
+              <Route path="/tickets/escalations" element={<TicketsPage initialView="escalations" />} />
+              <Route path="/tickets/:ticketId" element={<TicketDetailPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/reports/kpis" element={<DashboardKpisPage />} />
+              <Route path="/reports/departments" element={<DashboardDepartmentsPage />} />
+              <Route path="/reports/teams" element={<TeamsPage />} />
+              <Route path="/reports/sla" element={<SlaPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/help" element={<DashboardLandingPage />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </div>

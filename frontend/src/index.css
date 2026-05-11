@@ -205,6 +205,40 @@ kbd,
 .pill-cat-question { background: #fff4de; color: #8a6100; }
 .pill-cat-unknown { background: #f2f3f5; color: #6c707a; }
 
+.lazy-fallback {
+  padding: 24px;
+  font-size: 13px;
+  color: #6c707a;
+}
+
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: #f8f9fb;
+}
+.error-boundary-card {
+  max-width: 480px;
+  padding: 28px 32px;
+  background: #ffffff;
+  border: 1px solid #e2e4e8;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+}
+.error-boundary-card h1 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  color: #b33b3f;
+}
+.error-boundary-card p {
+  margin: 0 0 18px 0;
+  font-size: 14px;
+  color: #4f545c;
+  line-height: 1.5;
+}
+
 .solvability-self-service { background: #daf4e6; color: #1a6b42; }
 .solvability-l1 { background: #e8f0ff; color: #1e4fb8; }
 .solvability-l2 { background: #fff0d6; color: #9a5a00; }

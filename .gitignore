@@ -20,9 +20,12 @@ venv/
 .env
 litellm_config.yaml
 
-# Test / coverage
+# Test / coverage / lint caches
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
 .coverage
+.coverage.*
 htmlcov/
 coverage.xml
 frontend/coverage/

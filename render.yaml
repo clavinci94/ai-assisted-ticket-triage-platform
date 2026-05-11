@@ -7,8 +7,11 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
+      # Restrict to *our* Render frontend specifically. The previous wildcard
+      # (^https://.*\.onrender\.com$) accepted any Render-hosted site, which
+      # lets an unrelated Render app's frontend invoke this API.
       - key: CORS_ALLOW_ORIGIN_REGEX
-        value: ^https://.*\\.onrender\\.com$
+        value: ^https://ai-assisted-ticket-triage-frontend(-[a-z0-9]+)?\.onrender\.com$
       - key: LITELLM_API_BASE
         sync: false
       - key: LITELLM_API_KEY
