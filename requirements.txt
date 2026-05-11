@@ -1,13 +1,19 @@
-fastapi
-uvicorn[standard]
-pydantic
-scikit-learn
-pandas
-numpy
-python-dotenv
-sqlalchemy
-joblib
-litellm
-psycopg[binary]
-pyyaml
-slowapi
+# Backend runtime dependencies.
+#
+# Versions are minor-pinned (~=) so Render rebuilds pick up patch fixes
+# automatically but never silently upgrade across breaking minor bumps.
+# Bump these intentionally; let Dependabot open PRs for the diff.
+
+fastapi~=0.135.0
+uvicorn[standard]~=0.42.0
+pydantic~=2.12.0
+scikit-learn~=1.8.0
+pandas~=3.0.0
+numpy~=2.4.0
+python-dotenv~=1.2.0
+sqlalchemy~=2.0.0
+joblib~=1.5.0
+litellm~=1.82.0
+psycopg[binary]~=3.3.0
+pyyaml~=6.0.0
+slowapi~=0.1.9

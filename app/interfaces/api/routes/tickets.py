@@ -9,6 +9,7 @@ from starlette.requests import Request as StarletteRequest
 
 from app.application.ports.similar_tickets_port import SimilarTicketsPort
 from app.application.use_cases.add_ticket_comment import AddTicketCommentUseCase
+from app.application.use_cases.analytics_cache import analytics_cache
 from app.application.use_cases.assign_ticket import AssignTicketUseCase
 from app.application.use_cases.escalate_ticket import EscalateTicketUseCase
 from app.application.use_cases.get_dashboard_analytics import GetDashboardAnalyticsUseCase
@@ -555,6 +556,7 @@ def preview_ticket_with_llm(
 def review_triage_decision(
     request: TriageDecisionRequest,
     repository: TicketRepositoryDep,
+    similar_tickets: SimilarTicketsDep,
 ) -> TriageDecisionResponse:
     get_use_case = GetTicketUseCase(repository=repository)
     record = get_use_case.execute(request.ticket_id)
@@ -572,8 +574,15 @@ def review_triage_decision(
         reviewed_by=request.reviewed_by,
     )
 
-    save_use_case = SaveTriageDecisionUseCase(repository=repository)
+    # Passing similar_tickets refreshes the RAG index in-place so the next
+    # triage request sees the new reviewed ticket as a retrieval candidate.
+    save_use_case = SaveTriageDecisionUseCase(repository=repository, similar_tickets=similar_tickets)
     updated_record = save_use_case.execute(request.ticket_id, decision)
+
+    # A new reviewed ticket changes every distribution the analytics
+    # endpoint exposes — drop the cached snapshot so the next /analytics
+    # call recomputes.
+    analytics_cache.invalidate()
 
     return _to_decision_response(updated_record.ticket.id, updated_record.decision)
 
@@ -695,8 +704,13 @@ def escalate_ticket(
 def get_dashboard_analytics(
     repository: TicketRepositoryDep,
 ) -> DashboardAnalyticsResponse:
+    # The aggregation reads every ticket and runs ~20 distributions over
+    # them. Cache the dataclass result for 60s so the Reports page doesn't
+    # rescan the table on every refresh. Cache is invalidated on
+    # /tickets/decision (see SaveTriageDecisionUseCase wiring) and on the
+    # admin endpoints that mutate the corpus (seed-demo, backfill).
     use_case = GetDashboardAnalyticsUseCase(repository=repository)
-    result = use_case.execute()
+    result = analytics_cache.get_or_compute(use_case.execute)
 
     return DashboardAnalyticsResponse(
         stats=result.stats,

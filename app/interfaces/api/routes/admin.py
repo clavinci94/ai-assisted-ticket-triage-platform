@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.application.ports.similar_tickets_port import SimilarTicketsPort
+from app.application.use_cases.analytics_cache import analytics_cache
 from app.application.use_cases.backfill_prioritization import (
     BackfillPrioritizationUseCase,
 )
@@ -128,6 +129,8 @@ def seed_demo_corpus(
     except Exception:
         indexed = None
 
+    analytics_cache.invalidate()
+
     return SeedDemoResponse(
         status=result["status"],
         deleted=result["deleted"],
@@ -177,6 +180,8 @@ def backfill_prioritization(
     except Exception as exc:  # pragma: no cover — surfaced as HTTP error
         logger.exception("prioritization backfill failed")
         raise HTTPException(status_code=500, detail="Prioritization backfill failed.") from exc
+
+    analytics_cache.invalidate()
 
     return BackfillPrioritizationResponse(
         status="ok",
