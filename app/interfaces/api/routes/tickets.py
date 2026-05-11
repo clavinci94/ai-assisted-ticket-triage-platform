@@ -704,6 +704,12 @@ def get_dashboard_analytics(
         backlog_development=result.backlog_development,
         needs_attention=result.needs_attention,
         recent_activity=result.recent_activity,
+        impact_distribution=result.impact_distribution,
+        urgency_distribution=result.urgency_distribution,
+        solvability_distribution=result.solvability_distribution,
+        effort_buckets=result.effort_buckets,
+        composite_priority_buckets=result.composite_priority_buckets,
+        ke_metrics=result.ke_metrics,
     )
 
 

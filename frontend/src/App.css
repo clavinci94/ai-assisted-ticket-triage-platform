@@ -852,6 +852,64 @@ a {
   gap: 12px;
 }
 
+.ke-reports-section {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.ke-reports-header h2 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ke-reports-header p {
+  margin: 4px 0 14px 0;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.ke-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ke-kpi-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--bg-surface);
+}
+
+.ke-kpi-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.ke-kpi-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.ke-kpi-suffix {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
 .report-panel {
   background: var(--bg-surface);
   border: 1px solid var(--border);

@@ -871,7 +871,7 @@ export default function TicketDetailPage() {
               </SectionCard>
 
               {ticket.prioritization ? (
-                <SectionCard title="KE-Priorisierung">
+                <SectionCard title="Priorisierung & Aufwand">
                   <PrioritizationPanel prioritization={ticket.prioritization} variant="detail" />
                 </SectionCard>
               ) : null}

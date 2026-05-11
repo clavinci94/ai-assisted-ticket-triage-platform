@@ -290,6 +290,14 @@ class DashboardTicketSummary(BaseModel):
     priority: str
 
 
+class KnowledgeEngineeringMetricsResponse(BaseModel):
+    prioritized_count: int = 0
+    auto_resolve_count: int = 0
+    self_service_count: int = 0
+    avg_effort_minutes: int = 0
+    total_effort_hours: int = 0
+
+
 class DashboardAnalyticsResponse(BaseModel):
     stats: DashboardMetricStats
     status_distribution: list[AnalyticsDistributionItem]
@@ -307,3 +315,11 @@ class DashboardAnalyticsResponse(BaseModel):
     backlog_development: list[BacklogPointResponse]
     needs_attention: list[DashboardTicketSummary]
     recent_activity: list[DashboardTicketSummary]
+    impact_distribution: list[AnalyticsDistributionItem] = Field(default_factory=list)
+    urgency_distribution: list[AnalyticsDistributionItem] = Field(default_factory=list)
+    solvability_distribution: list[AnalyticsDistributionItem] = Field(default_factory=list)
+    effort_buckets: list[AnalyticsDistributionItem] = Field(default_factory=list)
+    composite_priority_buckets: list[AnalyticsDistributionItem] = Field(default_factory=list)
+    ke_metrics: KnowledgeEngineeringMetricsResponse = Field(
+        default_factory=KnowledgeEngineeringMetricsResponse
+    )

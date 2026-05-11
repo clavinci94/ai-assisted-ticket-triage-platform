@@ -51,27 +51,43 @@ export default function PrioritizationPanel({ prioritization, variant = "modal" 
 
   return (
     <div className={`prioritization-panel prioritization-panel-${variant}`}>
-      <p className="eyebrow">Knowledge-Engineering-Priorisierung</p>
+      <p className="eyebrow">Priorisierung & Aufwand</p>
 
       <div className="prioritization-grid">
         <div className="prioritization-card">
-          <span className="prioritization-label">Impact</span>
+          <span className="prioritization-label" title="Wie wichtig ist dieser Vorgang fachlich/geschäftlich?">
+            Wichtigkeit
+          </span>
           <strong className="prioritization-value">{impact}/5</strong>
         </div>
         <div className="prioritization-card">
-          <span className="prioritization-label">Urgenz</span>
+          <span className="prioritization-label" title="Wie schnell muss reagiert werden?">
+            Dringlichkeit
+          </span>
           <strong className="prioritization-value">{urgency}/5</strong>
         </div>
         <div className="prioritization-card">
-          <span className="prioritization-label">Aufwand</span>
+          <span className="prioritization-label" title="Geschätzter Bearbeitungsaufwand">
+            Aufwand
+          </span>
           <strong className="prioritization-value">{formatMinutes(effort)}</strong>
         </div>
         <div className="prioritization-card">
-          <span className="prioritization-label">Lösbarkeit</span>
+          <span
+            className="prioritization-label"
+            title="Self-Service = vom Reporter selbst lösbar · L1/L2 = Service-Desk-Stufen · Spezialist = Fachexperte nötig"
+          >
+            Lösbarkeit
+          </span>
           <span className={`pill ${solvabilityClass}`}>{solvabilityLabel(solvability)}</span>
         </div>
         <div className="prioritization-card prioritization-card-composite">
-          <span className="prioritization-label">Composite-Prio (I×U)</span>
+          <span
+            className="prioritization-label"
+            title="Prio-Score = Wichtigkeit × Dringlichkeit (1–25, sortiert den Backlog)"
+          >
+            Prio-Score
+          </span>
           <span className={`prio-dot ${tone}`}>
             <span className="tabular-nums">{compositeRounded}</span>
           </span>

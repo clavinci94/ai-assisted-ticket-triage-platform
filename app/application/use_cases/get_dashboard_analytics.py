@@ -1,3 +1,4 @@
+import contextlib
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -25,6 +26,12 @@ class DashboardAnalyticsResult:
     backlog_development: list[dict[str, int | str]]
     needs_attention: list[dict[str, Any]]
     recent_activity: list[dict[str, Any]]
+    impact_distribution: list[dict[str, int | str]]
+    urgency_distribution: list[dict[str, int | str]]
+    solvability_distribution: list[dict[str, int | str]]
+    effort_buckets: list[dict[str, int | str]]
+    composite_priority_buckets: list[dict[str, int | str]]
+    ke_metrics: dict[str, int]
 
 
 class GetDashboardAnalyticsUseCase:
@@ -138,6 +145,12 @@ class GetDashboardAnalyticsUseCase:
             backlog_development=self._build_backlog_development(tickets),
             needs_attention=needs_attention,
             recent_activity=recent_activity,
+            impact_distribution=self._build_score_distribution(tickets, "impact_score"),
+            urgency_distribution=self._build_score_distribution(tickets, "urgency_score"),
+            solvability_distribution=self._build_solvability_distribution(tickets),
+            effort_buckets=self._build_effort_buckets(tickets),
+            composite_priority_buckets=self._build_composite_priority_buckets(tickets),
+            ke_metrics=self._build_ke_metrics(tickets),
         )
 
     def _record_to_dict(self, record: TicketRecord) -> dict[str, Any]:
@@ -190,6 +203,8 @@ class GetDashboardAnalyticsUseCase:
             or (analysis.suggested_team if analysis else None)
         )
 
+        prioritization = getattr(record, "prioritization", None)
+
         return {
             "id": ticket.id,
             "title": ticket.title,
@@ -211,6 +226,12 @@ class GetDashboardAnalyticsUseCase:
             else False,
             "reviewed": decision is not None,
             "assigned": assignment is not None,
+            "impact_score": getattr(prioritization, "impact_score", None),
+            "urgency_score": getattr(prioritization, "urgency_score", None),
+            "effort_estimate_minutes": getattr(prioritization, "effort_estimate_minutes", None),
+            "solvability": (prioritization.solvability.value if prioritization else None),
+            "composite_priority": getattr(prioritization, "composite_priority", None),
+            "auto_resolve_eligible": getattr(prioritization, "auto_resolve_eligible", None),
         }
 
     def _record_created_at(self, record: TicketRecord):
@@ -396,6 +417,109 @@ class GetDashboardAnalyticsUseCase:
             )
 
         return points
+
+    def _build_score_distribution(
+        self, tickets: list[dict[str, Any]], key: str
+    ) -> list[dict[str, int | str]]:
+        """Counts per integer score 1–5. Tickets without a value are skipped."""
+
+        counts: Counter[int] = Counter()
+        for ticket in tickets:
+            value = ticket.get(key)
+            if value is None:
+                continue
+            try:
+                score = int(value)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= score <= 5:
+                counts[score] += 1
+        return [{"name": str(score), "value": counts.get(score, 0)} for score in range(1, 6)]
+
+    def _build_solvability_distribution(self, tickets: list[dict[str, Any]]) -> list[dict[str, int | str]]:
+        labels = {
+            "self-service": "Self-Service",
+            "l1": "L1",
+            "l2": "L2",
+            "specialist": "Spezialist",
+        }
+        counts: Counter[str] = Counter()
+        for ticket in tickets:
+            raw = ticket.get("solvability")
+            if not raw:
+                continue
+            counts[str(raw).lower()] += 1
+        return [{"name": label, "value": counts.get(key, 0)} for key, label in labels.items()]
+
+    def _build_effort_buckets(self, tickets: list[dict[str, Any]]) -> list[dict[str, int | str]]:
+        buckets = [
+            ("< 15 min", 0, 15),
+            ("15–60 min", 15, 60),
+            ("1–2 h", 60, 120),
+            ("2–4 h", 120, 240),
+            ("> 4 h", 240, 10**9),
+        ]
+        counts: dict[str, int] = {label: 0 for label, _, _ in buckets}
+        for ticket in tickets:
+            value = ticket.get("effort_estimate_minutes")
+            if value is None:
+                continue
+            try:
+                minutes = int(value)
+            except (TypeError, ValueError):
+                continue
+            for label, lower, upper in buckets:
+                if lower <= minutes < upper:
+                    counts[label] += 1
+                    break
+        return [{"name": label, "value": counts[label]} for label, _, _ in buckets]
+
+    def _build_composite_priority_buckets(self, tickets: list[dict[str, Any]]) -> list[dict[str, int | str]]:
+        buckets = [
+            ("Niedrig (1–5)", 1, 6),
+            ("Mittel (6–11)", 6, 12),
+            ("Hoch (12–19)", 12, 20),
+            ("Kritisch (20–25)", 20, 26),
+        ]
+        counts: dict[str, int] = {label: 0 for label, _, _ in buckets}
+        for ticket in tickets:
+            value = ticket.get("composite_priority")
+            if value is None:
+                continue
+            try:
+                score = float(value)
+            except (TypeError, ValueError):
+                continue
+            for label, lower, upper in buckets:
+                if lower <= score < upper:
+                    counts[label] += 1
+                    break
+        return [{"name": label, "value": counts[label]} for label, _, _ in buckets]
+
+    def _build_ke_metrics(self, tickets: list[dict[str, Any]]) -> dict[str, int]:
+        efforts: list[int] = []
+        prioritized = 0
+        auto_resolve = 0
+        self_service = 0
+        for ticket in tickets:
+            if ticket.get("impact_score") is not None:
+                prioritized += 1
+            if ticket.get("auto_resolve_eligible"):
+                auto_resolve += 1
+            if str(ticket.get("solvability") or "").lower() == "self-service":
+                self_service += 1
+            effort = ticket.get("effort_estimate_minutes")
+            if effort is not None:
+                with contextlib.suppress(TypeError, ValueError):
+                    efforts.append(int(effort))
+        avg_effort = round(sum(efforts) / len(efforts)) if efforts else 0
+        return {
+            "prioritized_count": prioritized,
+            "auto_resolve_count": auto_resolve,
+            "self_service_count": self_service,
+            "avg_effort_minutes": avg_effort,
+            "total_effort_hours": round(sum(efforts) / 60) if efforts else 0,
+        }
 
     def _distribution(
         self,

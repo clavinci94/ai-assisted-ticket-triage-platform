@@ -71,3 +71,4 @@ e2e/playwright/.cache/
 # Vite dev-server scratch files
 frontend/vite.config.js.timestamp-*.mjs
 frontend/vite.config.ts.timestamp-*.mjs
+.claude/

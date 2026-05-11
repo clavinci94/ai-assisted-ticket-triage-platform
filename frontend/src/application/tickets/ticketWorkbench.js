@@ -36,7 +36,7 @@ export const COLUMN_OPTIONS = [
   { key: "category", label: "Kategorie", sortable: true },
   { key: "status", label: "Status", sortable: true },
   { key: "priority", label: "Priorität", sortable: true },
-  { key: "composite_priority", label: "KE-Prio (I×U)", sortable: true },
+  { key: "composite_priority", label: "Prio-Score", sortable: true },
   { key: "effort_estimate_minutes", label: "Aufwand", sortable: true },
   { key: "solvability", label: "Lösbarkeit", sortable: true },
   { key: "team", label: "Team", sortable: true },

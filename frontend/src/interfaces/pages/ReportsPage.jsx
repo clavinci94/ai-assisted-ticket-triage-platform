@@ -38,29 +38,43 @@ function numericAggregates(series, key) {
   return { avg, median, peak };
 }
 
-function ChartPanel({ title, series, valueKey, children }) {
+function ChartPanel({ title, series, valueKey, hideAggregates = false, children }) {
   const aggregates = useMemo(() => numericAggregates(series, valueKey), [series, valueKey]);
   return (
     <section className="report-panel">
       <header className="report-panel-head">
         <h2>{title}</h2>
-        <div className="report-panel-aggregates">
-          <div>
-            <span>∅</span>
-            <strong className="tabular-nums">{aggregates.avg}</strong>
+        {hideAggregates ? null : (
+          <div className="report-panel-aggregates">
+            <div>
+              <span>∅</span>
+              <strong className="tabular-nums">{aggregates.avg}</strong>
+            </div>
+            <div>
+              <span>Median</span>
+              <strong className="tabular-nums">{aggregates.median}</strong>
+            </div>
+            <div>
+              <span>Peak</span>
+              <strong className="tabular-nums">{aggregates.peak}</strong>
+            </div>
           </div>
-          <div>
-            <span>Median</span>
-            <strong className="tabular-nums">{aggregates.median}</strong>
-          </div>
-          <div>
-            <span>Peak</span>
-            <strong className="tabular-nums">{aggregates.peak}</strong>
-          </div>
-        </div>
+        )}
       </header>
       <div className="report-panel-body">{children}</div>
     </section>
+  );
+}
+
+function KpiTile({ label, value, suffix }) {
+  return (
+    <div className="ke-kpi-tile">
+      <span className="ke-kpi-label">{label}</span>
+      <strong className="ke-kpi-value tabular-nums">
+        {value}
+        {suffix ? <span className="ke-kpi-suffix">{suffix}</span> : null}
+      </strong>
+    </div>
   );
 }
 
@@ -143,6 +157,15 @@ export default function ReportsPage() {
     const rows = analytics?.team_distribution || [];
     return rows.map((r) => r.name).filter(Boolean);
   }, [analytics]);
+
+  const compositeBuckets = analytics?.composite_priority_buckets || [];
+  const effortBuckets = analytics?.effort_buckets || [];
+  const solvabilityDist = analytics?.solvability_distribution || [];
+  const keMetrics = analytics?.ke_metrics || {};
+  const totalKePrioritized = Math.max(0, keMetrics.prioritized_count || 0);
+  const selfServicePercent = totalKePrioritized
+    ? Math.round(((keMetrics.self_service_count || 0) / totalKePrioritized) * 100)
+    : 0;
 
   return (
     <div className="app-shell reports-shell">
@@ -253,6 +276,109 @@ export default function ReportsPage() {
           )}
         </ChartPanel>
       </div>
+
+      <section className="ke-reports-section">
+        <header className="ke-reports-header">
+          <h2>Priorisierung & Aufwand</h2>
+          <p>
+            Wissensbasierte Bewertung jedes Tickets nach Wichtigkeit, Dringlichkeit,
+            Aufwand und Lösbarkeit — abgeleitet aus Regelwerk und historischen Lösungen.
+          </p>
+        </header>
+
+        <div className="ke-kpi-row">
+          <KpiTile label="Tickets bewertet" value={totalKePrioritized} />
+          <KpiTile
+            label="Self-Service-fähig"
+            value={keMetrics.self_service_count || 0}
+            suffix={` (${selfServicePercent}%)`}
+          />
+          <KpiTile label="Auto-Resolve-Treffer" value={keMetrics.auto_resolve_count || 0} />
+          <KpiTile
+            label="Ø Aufwand"
+            value={Math.round((keMetrics.avg_effort_minutes || 0))}
+            suffix=" min"
+          />
+          <KpiTile
+            label="Gesamtaufwand"
+            value={keMetrics.total_effort_hours || 0}
+            suffix=" h"
+          />
+        </div>
+
+        <div className="reports-chart-row">
+          <ChartPanel title="Prio-Score Verteilung" series={compositeBuckets} valueKey="value" hideAggregates>
+            {compositeBuckets.some((b) => (b.value || 0) > 0) ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={compositeBuckets} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke="#F1F2F4" strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="name"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 10, fill: "#626772" }}
+                    interval={0}
+                  />
+                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#9AA0AA" }} />
+                  <Tooltip contentStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="value" fill="#5E6AD2" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="chart-empty">Keine bewerteten Tickets.</p>
+            )}
+          </ChartPanel>
+
+          <ChartPanel title="Aufwand Verteilung" series={effortBuckets} valueKey="value" hideAggregates>
+            {effortBuckets.some((b) => (b.value || 0) > 0) ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={effortBuckets} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke="#F1F2F4" strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="name"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 10, fill: "#626772" }}
+                    interval={0}
+                  />
+                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#9AA0AA" }} />
+                  <Tooltip contentStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="value" fill="#30A46C" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="chart-empty">Keine Aufwandsdaten.</p>
+            )}
+          </ChartPanel>
+
+          <ChartPanel title="Lösbarkeit (Self-Service → Spezialist)" series={solvabilityDist} valueKey="value" hideAggregates>
+            {solvabilityDist.some((b) => (b.value || 0) > 0) ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart
+                  data={solvabilityDist}
+                  layout="vertical"
+                  margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
+                >
+                  <CartesianGrid horizontal={false} stroke="#F1F2F4" strokeDasharray="3 3" />
+                  <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#9AA0AA" }} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    tickLine={false}
+                    axisLine={false}
+                    width={92}
+                    tick={{ fontSize: 11, fill: "#626772" }}
+                  />
+                  <Tooltip contentStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="value" fill="#F5A623" radius={[0, 3, 3, 0]} barSize={14} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="chart-empty">Noch keine Lösbarkeits-Daten.</p>
+            )}
+          </ChartPanel>
+        </div>
+      </section>
 
       <div className="reports-detail-row">
         <DetailList
