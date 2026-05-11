@@ -169,9 +169,7 @@ class PolicyBasedPrioritizer(PrioritizationPort):
             if has_tags and has_title:
                 if not (tag_hit or title_hit):
                     return False
-            elif has_tags and not tag_hit:
-                return False
-            elif has_title and not title_hit:
+            elif has_tags and not tag_hit or has_title and not title_hit:
                 return False
 
         if "ai_category_any" in match:
