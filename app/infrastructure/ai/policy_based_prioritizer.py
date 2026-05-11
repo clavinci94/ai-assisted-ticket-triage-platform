@@ -151,14 +151,27 @@ class PolicyBasedPrioritizer(PrioritizationPort):
         if "department" in match and match["department"] != context["department"]:
             return False
 
-        if "tags_any" in match:
-            wanted = {t.lower() for t in match["tags_any"]}
-            if not wanted.intersection(context["tags"]):
+        # tags_any + title_any are treated as alternative *detectors* for
+        # the same intent: a rule with both fires when either matches, so
+        # tag-less legacy tickets are still caught via title keywords.
+        # Each criterion still acts as a hard filter when used alone.
+        has_tags = "tags_any" in match
+        has_title = "title_any" in match
+        if has_tags or has_title:
+            tag_hit = False
+            title_hit = False
+            if has_tags:
+                wanted = {t.lower() for t in match["tags_any"]}
+                tag_hit = bool(wanted.intersection(context["tags"]))
+            if has_title:
+                haystack = context["title_description"]
+                title_hit = any(word.lower() in haystack for word in match["title_any"])
+            if has_tags and has_title:
+                if not (tag_hit or title_hit):
+                    return False
+            elif has_tags and not tag_hit:
                 return False
-
-        if "title_any" in match:
-            haystack = context["title_description"]
-            if not any(word.lower() in haystack for word in match["title_any"]):
+            elif has_title and not title_hit:
                 return False
 
         if "ai_category_any" in match:

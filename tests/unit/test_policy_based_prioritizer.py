@@ -114,8 +114,35 @@ def test_no_neighbours_falls_back_to_yaml_default_effort():
 def test_default_rule_kicks_in_when_no_match():
     p = PolicyBasedPrioritizer()
     result = p.prioritize(_ticket(department="Unbekannte Abteilung"), _analysis())
-    # Default block in YAML: impact=3, urgency=3, solvability=l2
-    assert result.impact_score == 3
-    assert result.urgency_score == 3
-    assert result.composite_priority == 9.0
+    # Default block in YAML: impact=2, urgency=2, solvability=l2 → 4
+    # (kept low so the Mittel-bucket isn't a catch-all for unmatched tickets)
+    assert result.impact_score == 2
+    assert result.urgency_score == 2
+    assert result.composite_priority == 4.0
     assert result.solvability == SolvabilityLevel.L2
+
+
+def test_tag_alone_matches_when_title_also_listed():
+    """Regression: tags_any + title_any are OR'd, so a tag hit alone is enough."""
+    p = PolicyBasedPrioritizer()
+    # Use AML tag with a title that doesn't contain AML keywords.
+    result = p.prioritize(
+        _ticket(tags=["aml"], title="Nichts Bemerkenswertes", description=""),
+        _analysis(),
+    )
+    assert result.impact_score == 5
+    assert result.solvability == SolvabilityLevel.SPECIALIST
+
+
+def test_title_alone_matches_when_tags_empty():
+    """Regression: a tag-less ticket hits a tag+title rule via the title keyword."""
+    p = PolicyBasedPrioritizer()
+    result = p.prioritize(
+        _ticket(tags=[], title="VPN-Zugang funktioniert nicht", description="Citrix bricht ab."),
+        _analysis(),
+    )
+    # vpn-blocking rule: impact=3, urgency=4
+    assert result.impact_score == 3
+    assert result.urgency_score == 4
+    assert result.solvability == SolvabilityLevel.L1
+    assert result.runbook_url is not None

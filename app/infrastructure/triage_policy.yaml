@@ -1,9 +1,20 @@
 # Knowledge-engineered triage policy.
 #
 # Rules are evaluated top to bottom. Multiple rules can match a single
-# ticket; later rules override earlier values. The first match that sets
-# a runbook_url wins. Match criteria are ANDed within a rule and ORed
-# inside a list.
+# ticket; later rules override earlier values per field. The first match
+# that sets a runbook_url wins. Match criteria are ANDed within a rule
+# and ORed inside a list.
+#
+# Every rule that matches on tags also matches on title_any keywords so
+# tag-less legacy tickets (created before the KE layer existed) still
+# land in the right bucket via title heuristics. Keywords are lowercased
+# at match time.
+#
+# Score ranges:
+#   1–5   = Niedrig      (self-service, low impact)
+#   6–11  = Mittel       (standard support, predictable)
+#   12–19 = Hoch         (blocks work, customer-facing, time-sensitive)
+#   20–25 = Kritisch     (outage, compliance, regulatory)
 #
 # Confidence threshold for auto-resolve: if a rule sets
 # solvability=self-service AND the classifier's category_confidence is
@@ -16,10 +27,14 @@ self_service_confidence_threshold: 0.6
 default_effort_minutes: 60
 
 rules:
-  # ----- Compliance / regulatory: highest impact, no self-service -----
+  # =========================================================
+  # Tier 5: Kritisch (Score 20–25)
+  # =========================================================
+
   - id: aml-critical
     match:
       tags_any: [aml, sanctions, kyc, compliance]
+      title_any: [aml, sanktion, sanctions, geldwäsche, money laundering, kyc]
     set:
       impact_score: 5
       urgency_score: 5
@@ -29,27 +44,37 @@ rules:
   - id: bafin-finma-audit
     match:
       tags_any: [bafin, finma, audit, marisk]
+      title_any: [bafin, finma, audit, marisk, aufsicht]
     set:
       impact_score: 5
       urgency_score: 4
       solvability: l2
       rationale: "Audit-/Aufsichts-Verfahren — fixe Fristen, Spezialist nötig."
 
-  # ----- Production outages / customer-facing failures -----
   - id: payments-critical
     match:
       department: "Payments Operations"
-      tags_any: [swift, target2, sct-inst, settlement, sepa]
     set:
       impact_score: 5
       urgency_score: 5
       solvability: l2
       rationale: "Zahlungsverkehrs-Störung — direkter Kundenimpact, Settlement-relevant."
 
+  - id: payments-keyword-fallback
+    # Catches SEPA/SWIFT/Settlement mentions on tickets that didn't land
+    # in Payments Operations department.
+    match:
+      title_any: [sepa, swift, mt103, mt202, target2, settlement, sct]
+    set:
+      impact_score: 4
+      urgency_score: 5
+      solvability: l2
+      rationale: "Zahlungsverkehrs-Thema (per Titel erkannt) — schnelle Klärung nötig."
+
   - id: mobile-app-outage
     match:
       department: "Digital Channels"
-      tags_any: [mobile-app, online-banking]
+      tags_any: [mobile-app, online-banking, ebanking]
       ai_priority_any: [critical, high]
     set:
       impact_score: 5
@@ -57,20 +82,23 @@ rules:
       solvability: l2
       rationale: "Digital-Channel-Outage — viele Endkunden betroffen."
 
-  # ----- VPN / network: high urgency, mid effort -----
-  - id: vpn-blocking
+  - id: digital-channel-keyword-fallback
     match:
-      tags_any: [vpn, citrix]
+      title_any: [online-banking, online banking, ebanking, e-banking, mobile app, push-tan, push tan, qr-login]
     set:
-      impact_score: 3
+      impact_score: 4
       urgency_score: 4
-      solvability: l1
-      runbook_url: "https://kb.example.com/runbooks/vpn-citrix-troubleshoot"
-      rationale: "VPN-Vorgang — blockiert Arbeitsfähigkeit, Standard-Runbook vorhanden."
+      solvability: l2
+      rationale: "Digital-Channel-Vorgang (per Titel erkannt) — viele Endkunden potenziell betroffen."
+
+  # =========================================================
+  # Tier 4: Hoch (Score 12–19)
+  # =========================================================
 
   - id: mfa-token
     match:
       tags_any: [mfa, authenticator]
+      title_any: [mfa, authenticator, 2fa, token]
     set:
       impact_score: 4
       urgency_score: 5
@@ -78,50 +106,69 @@ rules:
       runbook_url: "https://kb.example.com/runbooks/mfa-rebind"
       rationale: "MFA-Sperre — User komplett ausgeschlossen, Standard-Reset durch Service-Desk."
 
-  # ----- Self-service candidates: high solvability -----
-  - id: password-self-service
+  - id: vpn-blocking
     match:
-      tags_any: [password]
-      title_any: [passwort, reset, lockout]
+      tags_any: [vpn, citrix]
+      title_any: [vpn, citrix, workspace]
     set:
-      impact_score: 2
-      urgency_score: 3
-      solvability: self-service
-      runbook_url: "https://selfservice.example.com/password-reset"
-      rationale: "Passwort-/Account-Reset — über Self-Service-Portal abdeckbar."
+      impact_score: 3
+      urgency_score: 4
+      solvability: l1
+      runbook_url: "https://kb.example.com/runbooks/vpn-citrix-troubleshoot"
+      rationale: "VPN-Vorgang — blockiert Arbeitsfähigkeit, Standard-Runbook vorhanden."
 
-  - id: access-fileshare-self-service
+  - id: baufi-time-sensitive
+    # Bau­finanzierungen haben oft fixe Notartermine — höher als ein
+    # normaler Lending-Vorgang.
     match:
-      tags_any: [access, fileshare]
+      tags_any: [baufi]
+      title_any: [baufinanzierung, immobilienfinanzierung, immobilie, notar, grundbuch]
     set:
-      impact_score: 2
-      urgency_score: 2
-      solvability: self-service
-      runbook_url: "https://kb.example.com/runbooks/access-request"
-      rationale: "Berechtigungs-Anfrage — Self-Service via Access-Request-Workflow."
+      impact_score: 4
+      urgency_score: 4
+      solvability: l2
+      rationale: "Bau­finanzierung — terminkritisch (Notar/Grundbuch), Lending-Ops priorisieren."
 
-  - id: onboarding
+  - id: ad-account-lockout
+    # AD-Sperren blockieren komplette Arbeitsfähigkeit, höher als normaler Passwort-Reset.
     match:
-      tags_any: [onboarding]
+      title_any: [ad-konto, ad konto, account gesperrt, ad gesperrt, lockout, konto gesperrt]
+    set:
+      impact_score: 4
+      urgency_score: 4
+      solvability: l1
+      runbook_url: "https://kb.example.com/runbooks/ad-unlock"
+      rationale: "AD-Account gesperrt — User vollständig ausgeschlossen, schnelle Entsperrung."
+
+  - id: sap-error
+    # SAP-Fehler treffen meist Finance- oder Operations-Teams — Mittelweg zwischen Standard-IT und Spezialist.
+    match:
+      tags_any: [sap, hyperion, datev]
+      title_any: [sap, hyperion, datev, fb60, s/4hana, s4hana]
+    set:
+      impact_score: 3
+      urgency_score: 4
+      solvability: l2
+      rationale: "SAP-/Finance-System-Fehler — Spezialteam User-Services."
+
+  # =========================================================
+  # Tier 3: Mittel (Score 6–11)
+  # =========================================================
+
+  - id: lending-baufi-default
+    # Wird nur erreicht, wenn baufi-time-sensitive *nicht* gematched hat
+    # (z. B. weil keine Termin-Indikatoren im Titel sind).
+    match:
+      department: "Lending Services"
+      ai_category_any: [requirement, question]
     set:
       impact_score: 3
       urgency_score: 2
-      solvability: l1
-      runbook_url: "https://kb.example.com/runbooks/employee-onboarding"
-      rationale: "Onboarding — Standard-Checkliste, Vorlauf vorhanden."
+      solvability: l2
+      rationale: "Standard-Lending-Vorgang ohne Termin-Druck."
 
-  # ----- Hardware: predictable effort, L1 -----
-  - id: hardware-standard
-    match:
-      tags_any: [hardware, printer, monitor, headset, laptop]
-    set:
-      impact_score: 2
-      urgency_score: 2
-      solvability: l1
-      rationale: "Hardware-Vorgang — Standard-Diagnose / Austausch durch Vor-Ort-Team."
-
-  # ----- Lending / Corporate / Retail business cases -----
   - id: lending-volume
+    # Fallback für sonstige Lending-Tickets (z. B. Kundenmeldungen, Verzögerungen).
     match:
       department: "Lending Services"
     set:
@@ -129,6 +176,17 @@ rules:
       urgency_score: 3
       solvability: l2
       rationale: "Kreditvorgang — fachlich, Vertriebs-/Risiko-Vote nötig."
+
+  - id: onboarding
+    match:
+      tags_any: [onboarding]
+      title_any: [onboarding, neuer mitarbeiter, neue mitarbeiterin]
+    set:
+      impact_score: 3
+      urgency_score: 2
+      solvability: l1
+      runbook_url: "https://kb.example.com/runbooks/employee-onboarding"
+      rationale: "Onboarding — Standard-Checkliste, Vorlauf vorhanden."
 
   - id: corporate-request
     match:
@@ -138,6 +196,68 @@ rules:
       urgency_score: 2
       solvability: l2
       rationale: "Corporate-Anfrage — Relationship-Manager bearbeitet."
+
+  - id: validation-issue
+    # IBAN/BIC/Validation-Fehler haben keinen Outage-Charakter, aber blockieren einzelne Vorgänge.
+    match:
+      tags_any: [validation, iban, bic, sic]
+      title_any: [iban, bic, sic, validierung, ungültig]
+    set:
+      impact_score: 2
+      urgency_score: 3
+      solvability: l2
+      rationale: "Validierungsproblem — einzelne Transaktion blockiert, kein Outage."
+
+  - id: wlan-network
+    # WLAN-Probleme blockieren Teilbereiche, nicht ganze Häuser.
+    match:
+      tags_any: [wlan, network]
+      title_any: [wlan, wifi, w-lan, access-point]
+    set:
+      impact_score: 2
+      urgency_score: 3
+      solvability: l1
+      rationale: "WLAN-/Netzwerk-Vorgang — lokal begrenzte Beeinträchtigung."
+
+  - id: password-self-service
+    match:
+      tags_any: [password]
+      title_any: [passwort, password, reset, vergessen]
+    set:
+      impact_score: 2
+      urgency_score: 3
+      solvability: self-service
+      runbook_url: "https://selfservice.example.com/password-reset"
+      rationale: "Passwort-/Account-Reset — über Self-Service-Portal abdeckbar."
+
+  # =========================================================
+  # Tier 2: Niedrig–Mittel (Score 4–6)
+  # =========================================================
+
+  - id: hardware-standard
+    match:
+      tags_any: [hardware, printer, monitor, headset, laptop, webcam, smartcard, tastatur, dock]
+      title_any: [drucker, printer, monitor, headset, laptop, kamera, webcam, smartcard, tastatur, dock, mainboard]
+    set:
+      impact_score: 2
+      urgency_score: 2
+      solvability: l1
+      rationale: "Hardware-Vorgang — Standard-Diagnose / Austausch durch Vor-Ort-Team."
+
+  - id: access-fileshare-self-service
+    match:
+      tags_any: [access, fileshare]
+      title_any: [laufwerk, fileshare, berechtigung, access, zugriff]
+    set:
+      impact_score: 2
+      urgency_score: 2
+      solvability: self-service
+      runbook_url: "https://kb.example.com/runbooks/access-request"
+      rationale: "Berechtigungs-Anfrage — Self-Service via Access-Request-Workflow."
+
+  # =========================================================
+  # Tier 1: Niedrig (Score 1–3)
+  # =========================================================
 
   - id: retail-question
     match:
@@ -150,9 +270,21 @@ rules:
       runbook_url: "https://www.example.com/produkte"
       rationale: "Produktanfrage Privatkunde — über Web-Produkt-Seite + Hotline abdeckbar."
 
-# Fallback applied if no rule matches. Conservative middle values, L2 fallback.
+  - id: retail-card-lost
+    # Verlorene Karten brauchen schnellen Sperr-Workflow, aber operativ nicht kritisch.
+    match:
+      title_any: [karte verloren, karte gesperrt, ec-karte, kreditkarte verloren, debitkarte]
+    set:
+      impact_score: 2
+      urgency_score: 3
+      solvability: l1
+      rationale: "Karten-Sperrung — Sofort-Hotline, danach Ersatzkartenprozess."
+
+# Fallback applied if no rule matches. Lowered from 3×3=9 to 2×2=4 so
+# the "Mittel"-bucket (score 6–11) is reserved for tickets a rule
+# explicitly placed there — not the noise of unmatched tickets.
 default:
-  impact_score: 3
-  urgency_score: 3
+  impact_score: 2
+  urgency_score: 2
   solvability: l2
-  rationale: "Keine spezifische Policy-Regel angewendet — Default-Eskalation an L2."
+  rationale: "Keine spezifische Policy-Regel — Default-Eskalation an L2."
