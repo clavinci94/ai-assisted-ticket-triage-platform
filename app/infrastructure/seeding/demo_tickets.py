@@ -1179,15 +1179,8 @@ def _purge_test_pollution(session) -> int:
     if not TEST_POLLUTION_TITLE_PREFIXES:
         return 0
 
-    filters = [
-        TicketRecordModel.title.like(f"{prefix}%")
-        for prefix in TEST_POLLUTION_TITLE_PREFIXES
-    ]
-    rows = (
-        session.query(TicketRecordModel.id)
-        .filter(or_(*filters))
-        .all()
-    )
+    filters = [TicketRecordModel.title.like(f"{prefix}%") for prefix in TEST_POLLUTION_TITLE_PREFIXES]
+    rows = session.query(TicketRecordModel.id).filter(or_(*filters)).all()
     ids = [row[0] for row in rows]
     return _delete_tickets(session, ids)
 
@@ -1317,8 +1310,7 @@ def seed(
             row[0]
             for row in session.query(TicketRecordModel.id)
             .filter(
-                TicketRecordModel.id.like(f"{SEED_PREFIX}%")
-                | TicketRecordModel.id.like(f"{HIST_PREFIX}%")
+                TicketRecordModel.id.like(f"{SEED_PREFIX}%") | TicketRecordModel.id.like(f"{HIST_PREFIX}%")
             )
             .all()
         }
