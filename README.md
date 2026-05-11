@@ -8,9 +8,9 @@
 [![Node 20](https://img.shields.io/badge/node-20.x-green.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](./LICENSE)
 
-> A production-grade ticket triage platform that combines an LLM with retrieval over **human-confirmed past decisions** — so every routing suggestion is grounded in real precedent, not just prose.
+> A production-grade ticket triage platform that combines an LLM with **retrieval over human-confirmed past decisions** and a **knowledge-engineered prioritization layer** — so every routing suggestion is grounded in real precedent and every ticket arrives at the workbench with an estimated effort, a priority score, and a solvability hint.
 
-A FastAPI backend, a React/Vite operator UI, and an AI layer that turns unstructured incoming tickets into reviewed, assigned, and reportable work — with a banking-style workbench for review, SLA tracking, and analytics.
+A FastAPI backend, a React/Vite operator UI, and an AI layer that turns unstructured incoming tickets into reviewed, assigned, prioritized, and reportable work — with a banking-style workbench for review, SLA tracking, and analytics.
 
 ---
 
@@ -24,7 +24,7 @@ A FastAPI backend, a React/Vite operator UI, and an AI layer that turns unstruct
 
 ![AI recommendation modal with similar past cases](docs/screenshots/ai-recommendation-modal.png)
 
-The operator sees the AI's suggested department, its reasoning, **and the most similar past tickets that a human reviewer has already routed** — with a similarity score. Accept, override, or cancel before anything is saved.
+The operator sees the AI's suggested department, its reasoning, **and the most similar past tickets that a human reviewer has already routed** — with a similarity score. The modal also surfaces the Knowledge-Engineering prioritization (Wichtigkeit, Dringlichkeit, Aufwand, Lösbarkeit, Prio-Score) and — for self-service-eligible cases — a runbook link the operator can hand to the reporter directly. Accept, override, or cancel before anything is saved.
 
 ### Operations dashboard
 
@@ -36,35 +36,37 @@ Live KPIs (total / open / critical / triaged / reviewed / active departments) pl
 
 ![Reporting page with charts and team breakdowns](docs/screenshots/Reports-overview.png)
 
-Ticket volume over time, backlog development, processing time by priority, top assignees, and active teams — with 7/30/90-day filtering.
+Ticket volume over time, backlog development, processing time by priority, top assignees, and active teams — with 7/30/90-day filtering. A dedicated **Priorisierung & Aufwand** section adds KPI tiles (tickets bewertet, Self-Service-Quote, Auto-Resolve-Treffer, Ø Aufwand, Gesamtaufwand) and three distribution charts (Prio-Score buckets, Aufwand buckets, Lösbarkeit).
 
 ### Operator workbench
 
 ![Ticket workbench table with filters and sorting](docs/screenshots/Tickets-workbench.png)
 
-Filter by status, priority, department, and source. Sort by any column. Bulk actions, pagination, column visibility — built for daily ticket review work.
+Filter by status, priority, department, and source. Sort by any column. Bulk actions, pagination, column visibility — built for daily ticket review work. New columns: **Prio-Score** (Wichtigkeit × Dringlichkeit), **Aufwand**, **Lösbarkeit** — sort the backlog by what actually matters operationally.
 
 ---
 
 ## Why this exists
 
-Internal support teams drown in unstructured tickets. Most "AI triage" tools either ignore historical context or hide their reasoning. This platform takes a different approach:
+Internal support teams drown in unstructured tickets. Most "AI triage" tools either ignore historical context, hide their reasoning, or stop at category prediction without saying anything about how urgent, how expensive, or how solvable a ticket really is. This platform takes a different approach:
 
 1. **Every AI recommendation is grounded** in the three most similar past tickets that a human has already routed.
-2. **The operator stays in control** — the AI suggests, the human accepts or overrides, and that decision becomes new training data for retrieval.
-3. **It's production-grade out of the box** — clean architecture, full CI/CD, security scans, three test layers, Docker image, deploy-ready for Render.
+2. **Every ticket gets a knowledge-engineered prioritization** — a structured score across four operational dimensions (importance, urgency, effort, solvability) derived from a transparent YAML rule set plus retrieval-based effort estimates from past resolutions.
+3. **The operator stays in control** — the AI suggests, the human accepts or overrides, and that decision becomes new training data for retrieval.
+4. **It's production-grade out of the box** — clean architecture, full CI/CD, security scans, three test layers, Docker image, deploy-ready for Render.
 
-The result is a system that gets better the more it's used, without ever asking a human to trust a black box.
+The result is a system that gets better the more it's used, surfaces self-service opportunities early, and never asks a human to trust a black box.
 
 ---
 
 ## Highlights
 
 - **Retrieval-augmented triage** — every LLM call is enriched with the top-3 most similar previously-reviewed tickets, shown clickably under each suggestion ([ADR 0004](./docs/adr/0004-retrieval-augmented-triage.md))
+- **Knowledge-engineered prioritization** — every ticket arrives at the operator with a structured score across four dimensions and a derived Prio-Score (1–25). Self-service cases are surfaced with a runbook link before a human picks them up ([details below](#knowledge-engineered-prioritization))
 - **AI preview before persistence** — operators see and can override the suggested department before anything is saved
 - **Operator workbench** — table views, filters, chips, pagination, bulk actions, plus a full ticket-detail workflow with assignment, status, escalation, comments, and audit trail
-- **Reporting hub** — KPI summaries, department and team analysis, SLA monitoring, backlog development, top-assignee and processing-time metrics
-- **Hexagonal architecture** — domain layer is pure Python with no framework imports; SQLite, Postgres, and the LLM are all swappable adapters
+- **Reporting hub** — KPI summaries, department and team analysis, SLA monitoring, backlog development, top-assignee and processing-time metrics — plus a dedicated KE-prioritization analytics block
+- **Hexagonal architecture** — domain layer is pure Python with no framework imports; SQLite, Postgres, the LLM, and the prioritization policy are all swappable adapters
 - **Full CI/CD** — ruff + pytest (75% gate) + Vitest + ESLint + Vite build + Playwright E2E + bandit + pip-audit + npm audit, all on every push
 - **Operational essentials** — health and readiness probes, structured JSON logging with `X-Request-ID` correlation, optional API-key auth, multi-stage Docker, Render blueprint
 - **German-localized frontend** for internal Swiss bank/operations contexts
@@ -77,22 +79,104 @@ The result is a system that gets better the more it's used, without ever asking 
 new ticket
    │
    ▼
-RagAssistedClassifier            (app/infrastructure/ai/rag_assisted_classifier.py)
+TriageTicketUseCase                 (app/application/use_cases/triage_ticket.py)
    │
-   ├── SimilarTicketsPort        → TfidfSimilarTicketsAdapter (scikit-learn)
+   ├── ClassifierPort               → MLClassifier (TF-IDF + Naive Bayes)
+   │                                  or RagAssistedClassifier → LitellmClassifier
+   │     └── retrieved examples injected as extra system context before the prompt
+   │
+   ├── SimilarTicketsPort           → TfidfSimilarTicketsAdapter (scikit-learn)
    │     └── top-3 reviewed tickets ranked by cosine similarity
    │
-   └── ClassifierPort            → LitellmClassifier
-         └── retrieved examples injected as extra system context before the prompt
+   └── PrioritizationPort           → PolicyBasedPrioritizer (YAML rule set)
+         ├── matches Impact / Urgency / Solvability / Runbook
+         └── averages effort_estimate_minutes across RAG neighbours
    │
    ▼
-TriageAnalysis (with similar_cases) → operator preview popup
+TriageAnalysis + Prioritization → operator preview popup
    │
    ▼
-operator accepts or overrides → ticket saved, audit event written
+operator accepts or overrides → ticket persisted with audit trail
 ```
 
 **Corpus rule:** only tickets with `reviewed_by IS NOT NULL` are retrievable. The retrieval layer learns **exclusively from human-confirmed routing**, never from historical AI guesses. Full rationale and rejected alternatives (sentence-transformers, pgvector, agent loops) live in [ADR 0004](./docs/adr/0004-retrieval-augmented-triage.md).
+
+---
+
+## Knowledge-engineered prioritization
+
+The classifier tells you *what kind* of ticket this is. The prioritizer tells you *what to do with it.* It runs after the classifier on every triage call and answers four operational questions in a single, explainable pass:
+
+| Dimension | Answers | How it's computed |
+|---|---|---|
+| **Wichtigkeit** (Impact, 1–5) | "How much does this matter to the business?" | YAML rule match on tags / department / AI category |
+| **Dringlichkeit** (Urgency, 1–5) | "How fast must we react?" | YAML rule match — same evaluator |
+| **Aufwand** (Effort, minutes) | "How expensive will this be?" | Mean `effort_estimate_minutes` of the top-k similar reviewed tickets (RAG), with a YAML fallback |
+| **Lösbarkeit** (Solvability) | "Self-Service · L1 · L2 · Spezialist — who needs to look at this?" | YAML rule match |
+
+Two derived signals drive UI behaviour:
+
+- **Prio-Score** = `Wichtigkeit × Dringlichkeit` (1–25). Sorts the backlog. AML at impact 5 × urgency 5 = 25 outranks a printer issue at 2 × 2 = 4.
+- **Auto-Resolve-Eligible** = `solvability == self-service` ∧ `category_confidence ≥ threshold`. When both are true, the modal surfaces a runbook URL the operator can paste back to the reporter instead of opening a queue slot.
+
+### The policy is a YAML file
+
+Domain knowledge lives in [`app/infrastructure/triage_policy.yaml`](./app/infrastructure/triage_policy.yaml), not buried in code. Rules look like:
+
+```yaml
+self_service_confidence_threshold: 0.6
+default_effort_minutes: 60
+
+rules:
+  - id: aml-critical
+    match: { tags_any: [aml, sanctions, kyc, compliance] }
+    set:
+      impact_score: 5
+      urgency_score: 5
+      solvability: specialist
+      rationale: "Compliance-/AML-Vorgang — regulatorisches Risiko, sofortige Eskalation."
+
+  - id: password-self-service
+    match:
+      tags_any: [password]
+      title_any: [passwort, reset, lockout]
+    set:
+      impact_score: 2
+      urgency_score: 3
+      solvability: self-service
+      runbook_url: "https://selfservice.example.com/password-reset"
+      rationale: "Passwort-/Account-Reset — über Self-Service-Portal abdeckbar."
+
+default:
+  impact_score: 3
+  urgency_score: 3
+  solvability: l2
+```
+
+A compliance officer can read it. So can the model. Adding a new rule means editing one file and restarting the service — no code change.
+
+### Why this layout
+
+1. **Explainable** — the prioritizer reports which rule IDs matched (`matched_rules`) and concatenates their rationales. Operators see exactly *why* a ticket scored what it did.
+2. **Cheap to evolve** — new business policies (e.g. new regulator, new product line) are config changes.
+3. **Learns from history** — effort is not invented in YAML, it's *averaged from real past resolutions* via the RAG layer. Add 50 new resolved VPN tickets, and the next VPN ticket's effort estimate sharpens automatically.
+4. **Surfaces the cheap wins** — by flagging self-service cases at intake, the demo's 11 self-service-eligible tickets (12% of the corpus) can be handed straight back to the reporter via runbook URL — measurable hours saved.
+
+### Operations: seeding & backfill
+
+- `POST /admin/seed-demo` populates the database with 20 curated demo tickets + 60 historical tickets, each prioritized at seed time so the workbench has data on day one.
+- `POST /admin/backfill-prioritization` re-runs the prioritizer over every ticket where `impact_score IS NULL` — useful after upgrading from a pre-KE version, or after a major policy change. Idempotent: re-running on a fully-prioritized DB does nothing.
+
+### Reporting
+
+The Reports page surfaces the KE layer with:
+
+- **KPI tiles**: tickets prioritized · self-service share · auto-resolve hits · average effort · total backlog effort
+- **Prio-Score distribution** (Niedrig 1–5 / Mittel 6–11 / Hoch 12–19 / Kritisch 20–25)
+- **Aufwand distribution** (< 15 min / 15–60 min / 1–2 h / 2–4 h / > 4 h)
+- **Lösbarkeit distribution** (Self-Service / L1 / L2 / Spezialist)
+
+These let an ops lead answer questions like *"how much of next week's backlog is actually self-service?"* or *"are we drowning in 4h+ tickets or in 30-minute ones?"* with a glance.
 
 ---
 
@@ -108,18 +192,18 @@ flowchart LR
     end
 
     subgraph Application["Application"]
-        UseCases["use cases<br/>triage, assign, escalate, ..."]
-        Ports["ports<br/>ClassifierPort, TicketRepositoryPort"]
+        UseCases["use cases<br/>triage, assign, escalate,<br/>backfill_prioritization, ..."]
+        Ports["ports<br/>ClassifierPort, SimilarTicketsPort,<br/>PrioritizationPort, TicketRepositoryPort"]
     end
 
     subgraph Domain["Domain (pure Python)"]
-        Entities["entities<br/>Ticket, TicketEvent, Assignment,<br/>TriageAnalysis, TriageDecision"]
-        Rules["rules + enums"]
+        Entities["entities<br/>Ticket, TriageAnalysis,<br/>Prioritization, SimilarCase, ..."]
+        Rules["rules + enums<br/>(SolvabilityLevel)"]
     end
 
     subgraph Infrastructure["Infrastructure (adapters)"]
         Persistence["persistence<br/>SQLAlchemy + SQLite/Postgres"]
-        AI["ai<br/>LiteLLM + ML classifier"]
+        AI["ai<br/>LiteLLM + ML classifier +<br/>PolicyBasedPrioritizer (YAML)"]
         Logging["logging<br/>structured JSON + request_id"]
     end
 
@@ -134,12 +218,12 @@ flowchart LR
     Infrastructure --> Domain
 ```
 
-Every dependency arrow points inward (Interfaces / Infrastructure → Application → Domain), so swapping SQLite for Postgres or LiteLLM for a different backend never touches business logic.
+Every dependency arrow points inward (Interfaces / Infrastructure → Application → Domain), so swapping SQLite for Postgres, LiteLLM for a different provider, or the YAML policy for a different rule engine never touches business logic.
 
 **Backend layers:**
 - `domain` — entities, enums, business constants, domain rules (no framework imports)
-- `application` — use cases, DTOs, abstract ports
-- `infrastructure` — persistence, AI adapters, configuration, logging
+- `application` — use cases, DTOs, abstract ports (`ClassifierPort`, `SimilarTicketsPort`, `PrioritizationPort`, `TicketRepositoryPort`)
+- `infrastructure` — persistence, AI/RAG/prioritization adapters, configuration, logging
 - `interfaces` — HTTP routes, schemas, middleware, API composition
 
 **Frontend layers:** mirror the backend (`interfaces` / `application` / `domain` / `infrastructure`).
@@ -152,7 +236,7 @@ Architectural decisions are documented as ADRs in [`docs/adr/`](./docs/adr/).
 
 | Layer | Tools |
 | --- | --- |
-| Backend | Python 3.11, FastAPI, SQLAlchemy, Pydantic, scikit-learn (TF-IDF + NearestNeighbors), LiteLLM |
+| Backend | Python 3.11, FastAPI, SQLAlchemy, Pydantic, scikit-learn (TF-IDF + NearestNeighbors), LiteLLM, PyYAML |
 | Frontend | React, Vite, React Router, Axios, Recharts |
 | Persistence | SQLite (dev), Postgres (prod, via Render) |
 | Quality | pytest + coverage, ruff, bandit, pip-audit, Vitest + Testing Library, ESLint, Playwright, gitleaks, pre-commit |
@@ -203,8 +287,8 @@ The frontend uses the backend on `http://127.0.0.1:8000` by default. Override wi
 Populate the database with the curated demo showcase (20 `DEMO-*` tickets) plus a richer
 historical corpus (60 `HIST-*` tickets across VPN, payments, mobile, compliance, lending …)
 so retrieval has something meaningful to match against. The seeder also purges known
-pytest fixtures (`WB-PAGE-CLAUDIO*`, `Workflow * Test`, …) and deduplicates non-seed rows
-with the same title — both default on.
+pytest fixtures (`WB-PAGE-CLAUDIO*`, `Workflow * Test`, …), deduplicates non-seed rows
+with the same title, and runs the KE prioritizer over every seeded ticket — all on by default.
 
 ```bash
 .venv/bin/python scripts/seed_demo_tickets.py            # idempotent: adds missing rows
@@ -218,6 +302,13 @@ also rebuilds the RAG index in one shot:
 curl -X POST https://<your-api>.onrender.com/admin/seed-demo
 ```
 
+If you're upgrading from a pre-KE version and have legacy tickets without prioritization
+data, fill them in once:
+
+```bash
+curl -X POST https://<your-api>.onrender.com/admin/backfill-prioritization
+```
+
 ---
 
 ## Frontend Navigation
@@ -226,12 +317,12 @@ curl -X POST https://<your-api>.onrender.com/admin/seed-demo
 | --- | --- |
 | `Startseite` | Platform overview and usage guidance |
 | `Übersicht` | Operator dashboard with KPI summaries |
-| `Alle Tickets` | Central workbench table |
+| `Alle Tickets` | Central workbench table — Prio-Score, Aufwand, Lösbarkeit columns visible by default |
 | `Meine Tickets` | Tickets assigned to the configured operator |
 | `Offene Tickets` | Active open queue |
 | `Eskalationen` | High-priority and escalated tickets |
-| `Ticket erfassen` | Ticket creation with AI preview popup |
-| `Reports` | Reporting hub (KPIs, departments, teams, SLA) |
+| `Ticket erfassen` | Ticket creation with AI preview popup (includes KE prioritization block) |
+| `Reports` | Reporting hub with a dedicated *Priorisierung & Aufwand* analytics section |
 | `Einstellungen` | Operator name and dashboard preferences (local browser storage) |
 
 ---
@@ -242,9 +333,9 @@ curl -X POST https://<your-api>.onrender.com/admin/seed-demo
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `POST` | `/tickets/triage` | Classic ML-based triage |
-| `POST` | `/tickets/triage/llm` | Persist ticket with LiteLLM-backed triage |
-| `POST` | `/tickets/triage/llm/preview` | Generate AI recommendation without saving |
+| `POST` | `/tickets/triage` | Classic ML-based triage (returns analysis + prioritization) |
+| `POST` | `/tickets/triage/llm` | Persist ticket with LiteLLM-backed triage (returns analysis + prioritization) |
+| `POST` | `/tickets/triage/llm/preview` | Generate AI recommendation + prioritization without saving |
 | `POST` | `/tickets/decision` | Save review decision |
 | `POST` | `/tickets/assign` | Assign team and assignee |
 | `POST` | `/tickets/status` | Update ticket status |
@@ -255,10 +346,10 @@ curl -X POST https://<your-api>.onrender.com/admin/seed-demo
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `GET` | `/tickets` | All ticket records |
-| `GET` | `/tickets/workbench` | Filtered, paginated table data |
-| `GET` | `/tickets/{ticket_id}` | Ticket details, analysis, events |
-| `GET` | `/tickets/analytics` | Dashboard and reporting analytics |
+| `GET` | `/tickets` | All ticket records (includes prioritization block per ticket) |
+| `GET` | `/tickets/workbench` | Filtered, paginated table data (sort by `composite_priority`, `effort_estimate_minutes`, …) |
+| `GET` | `/tickets/{ticket_id}` | Ticket details, analysis, prioritization, events |
+| `GET` | `/tickets/analytics` | Dashboard and reporting analytics (incl. KE distributions and metrics) |
 
 ### Operations
 
@@ -266,12 +357,14 @@ curl -X POST https://<your-api>.onrender.com/admin/seed-demo
 | --- | --- | --- |
 | `POST` | `/admin/retrain` | Retrain the classic ML model |
 | `POST` | `/admin/rebuild-rag` | Refit the retrieval index from current reviewed tickets |
+| `POST` | `/admin/seed-demo` | Populate / refresh the demo + historical corpus (idempotent) |
+| `POST` | `/admin/backfill-prioritization` | Run the KE prioritizer over every ticket without `impact_score` (idempotent) |
 | `GET` | `/health` | Liveness probe |
 | `GET` | `/ready` | Readiness probe (verifies DB connectivity) |
 
 Every response carries an `X-Request-ID` header. Pass one in yourself to propagate a correlation ID across the stack — every log line is tagged with it.
 
-**Analytics returned:** total / open / triaged / reviewed / assigned / closed counts, category and priority distribution, status and department breakdowns, SLA metrics, processing time per priority, top assignees, ticket volume over time, backlog development.
+**Analytics returned:** total / open / triaged / reviewed / assigned / closed counts, category and priority distribution, status and department breakdowns, SLA metrics, processing time per priority, top assignees, ticket volume over time, backlog development, plus the KE-prioritization block (impact / urgency / solvability distributions, effort buckets, composite-priority buckets, and an aggregate `ke_metrics` summary).
 
 ---
 
@@ -408,6 +501,8 @@ LITELLM_MODEL=azure_ai/gpt-oss-120b
 
 `.env.example` ships the recommended proxy template. `litellm_config.yaml` is only needed if you run your own local LiteLLM proxy.
 
+The KE prioritization policy is configured in [`app/infrastructure/triage_policy.yaml`](./app/infrastructure/triage_policy.yaml), not via environment variables — it's domain knowledge, not deployment configuration.
+
 ---
 
 ## Repository Structure
@@ -415,34 +510,47 @@ LITELLM_MODEL=azure_ai/gpt-oss-120b
 ```text
 .
 ├── app
-│   ├── application       # use cases, DTOs, ports
-│   ├── domain            # entities, enums, rules — pure Python
-│   ├── infrastructure    # persistence, AI adapters, config
-│   └── interfaces        # FastAPI routes, schemas, middleware
-├── frontend              # React / Vite UI (mirrors backend layering)
-├── tests                 # pytest: unit / application / api
-├── e2e                   # Playwright end-to-end tests
-├── scripts               # seed, migrate, ops helpers
-├── data                  # training data (issues.csv)
-├── docs/adr              # architecture decision records
-├── .github/workflows     # CI, Release, CD pipelines
-├── AGENTS.md             # agent & tool documentation
-├── Dockerfile            # multi-stage image
-├── render.yaml           # Render deployment config
-├── pyproject.toml        # pytest / ruff / coverage / bandit
+│   ├── application                 # use cases, DTOs, ports
+│   │   ├── ports                   # ClassifierPort, SimilarTicketsPort,
+│   │   │                           # PrioritizationPort, TicketRepositoryPort
+│   │   └── use_cases               # triage_ticket, backfill_prioritization, ...
+│   ├── domain                      # entities, enums, rules — pure Python
+│   │   ├── entities                # Ticket, TriageAnalysis, Prioritization, ...
+│   │   └── enums                   # TicketCategory, TicketPriority,
+│   │                               # TicketStatus, SolvabilityLevel
+│   ├── infrastructure              # persistence, AI adapters, policies
+│   │   ├── ai                      # MLClassifier, LitellmClassifier,
+│   │   │                           # TfidfSimilarTicketsAdapter,
+│   │   │                           # PolicyBasedPrioritizer
+│   │   ├── persistence             # SQLAlchemy models, repository
+│   │   ├── seeding                 # demo + historical seed corpus
+│   │   └── triage_policy.yaml      # knowledge-engineered priorization rules
+│   └── interfaces                  # FastAPI routes, schemas, middleware
+├── frontend                        # React / Vite UI (mirrors backend layering)
+├── tests                           # pytest: unit / application / api
+├── e2e                             # Playwright end-to-end tests
+├── scripts                         # seed, migrate, ops helpers
+├── data                            # training data (issues.csv)
+├── docs/adr                        # architecture decision records
+├── .github/workflows               # CI, Release, CD pipelines
+├── AGENTS.md                       # agent & tool documentation
+├── Dockerfile                      # multi-stage image
+├── render.yaml                     # Render deployment config
+├── pyproject.toml                  # pytest / ruff / coverage / bandit
 ├── .pre-commit-config.yaml
-└── dev.sh                # local backend + frontend launcher
+└── dev.sh                          # local backend + frontend launcher
 ```
 
 ---
 
 ## What I learned building this
 
-Three things I'd carry into the next project:
+Four things I'd carry into the next project:
 
 1. **Retrieval beats prompt-only every time.** The first version was a single LLM call with a long instruction prompt. It worked, but inconsistently. Adding a TF-IDF retrieval layer over reviewed tickets — even a simple one — improved consistency more than any prompt-engineering iteration.
-2. **Hexagonal architecture pays off the moment you switch a backend.** Moving from SQLite to Postgres for the Render deploy was a single environment variable. Swapping LiteLLM for a different provider would touch one file. The discipline up front saved hours later.
-3. **CI quality gates are the cheapest insurance you can buy.** A 75% coverage floor, ruff in pre-commit, and bandit + pip-audit + npm audit on every PR have already caught regressions and a vulnerable dependency before they hit `main`.
+2. **Knowledge engineering and ML are complements, not alternatives.** The classifier knows what *kind* of ticket this is; the YAML rule set knows what to *do* with it. Combining a transparent rule layer with RAG-driven effort estimates produces explainable, auditable prioritization that operators can override and policy authors can edit without touching code.
+3. **Hexagonal architecture pays off the moment you switch a backend.** Moving from SQLite to Postgres for the Render deploy was a single environment variable. Swapping LiteLLM, the policy rules, or the prioritizer adapter would touch one file each. The discipline up front saved hours later.
+4. **CI quality gates are the cheapest insurance you can buy.** A 75% coverage floor, ruff in pre-commit, and bandit + pip-audit + npm audit on every PR have already caught regressions and a vulnerable dependency before they hit `main`.
 
 What I'd do differently next time: start with Pydantic-validated structured outputs from day one (instead of parsing JSON strings), and write the eval set before the first production prompt rather than after.
 
@@ -450,13 +558,16 @@ What I'd do differently next time: start with Pydantic-validated structured outp
 
 ## Roadmap
 
+- [ ] Versioned policy files (so policy changes are auditable, not silent)
 - [ ] Multilingual ticket support (current corpus is German)
 - [ ] Replace TF-IDF with sentence-transformers embeddings + pgvector once the corpus crosses a few thousand reviewed tickets
 - [ ] Per-team SLA targets in reporting
+- [ ] Auto-resolve workflow: when a self-service ticket is detected, send the reporter the runbook link automatically and close as `awaiting-self-service`
 - [ ] Webhook outbound integration (Slack / Teams) for escalations
+- [ ] API-key auth for `/admin/*` endpoints (currently open)
 
 ---
 
 ## License
 
-Released under the MIT License — see [LICENSE](./LICENSE).
+This project is licensed under the [MIT License](./LICENSE).
