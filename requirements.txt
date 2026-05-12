@@ -4,7 +4,7 @@
 # automatically but never silently upgrade across breaking minor bumps.
 # Bump these intentionally; let Dependabot open PRs for the diff.
 
-fastapi~=0.135.0
+fastapi~=0.136.1
 uvicorn[standard]~=0.42.0
 pydantic~=2.12.0
 scikit-learn~=1.8.0
