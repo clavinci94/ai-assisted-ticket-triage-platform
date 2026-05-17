@@ -75,3 +75,6 @@ e2e/playwright/.cache/
 frontend/vite.config.js.timestamp-*.mjs
 frontend/vite.config.ts.timestamp-*.mjs
 .claude/
+
+# Local-only artefacts (course rubric screenshots, scratch images, …)
+/eval-criteria.png
