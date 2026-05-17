@@ -70,9 +70,11 @@ function FocusList({ title, items, emptyLabel }) {
         {items.length === 0 ? (
           <li className="focus-list-empty">{emptyLabel}</li>
         ) : (
-          items.slice(0, 8).map((ticket) => (
-            <li key={ticket.id} className="focus-row">
-              <Link to={`/tickets/${ticket.id}`} className="focus-row-link">
+          items.slice(0, 8).map((ticket) => {
+            const id = ticket.ticket_id ?? ticket.id;
+            return (
+            <li key={id} className="focus-row">
+              <Link to={`/tickets/${id}`} className="focus-row-link">
                 <span
                   className={`focus-row-dot prio-dot ${priorityClass(ticket.priority)}`}
                   aria-hidden="true"
@@ -86,7 +88,8 @@ function FocusList({ title, items, emptyLabel }) {
                 </span>
               </Link>
             </li>
-          ))
+            );
+          })
         )}
       </ul>
     </section>
@@ -113,9 +116,11 @@ function CriticalList({ title, items, emptyLabel }) {
         ) : (
           items.slice(0, 8).map((ticket) => {
             const scope = ticket.team || ticket.department || "—";
+            // API returns ticket_id, not id — guard against both for robustness.
+            const id = ticket.ticket_id ?? ticket.id;
             return (
-              <li key={ticket.id} className="critical-row">
-                <Link to={`/tickets/${ticket.id}`} className="critical-row-link">
+              <li key={id} className="critical-row">
+                <Link to={`/tickets/${id}`} className="critical-row-link">
                   <span
                     className={`focus-row-dot prio-dot ${priorityClass(ticket.priority)}`}
                     aria-hidden="true"
