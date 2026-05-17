@@ -232,7 +232,7 @@ def cache_diagnostics() -> dict:
             "id": id(tickets_list_cache),
             "ttl_seconds": tickets_list_cache._ttl,
             "entry_count": len(tickets_list_cache._entries),
-            "keys": [repr(k)[:80] for k in tickets_list_cache._entries.keys()],
+            "keys": [repr(k)[:80] for k in tickets_list_cache._entries],
         },
         "workbench_cache": {
             "id": id(workbench_cache),
