@@ -15,6 +15,11 @@ from app.application.use_cases.escalate_ticket import EscalateTicketUseCase
 from app.application.use_cases.get_dashboard_analytics import GetDashboardAnalyticsUseCase
 from app.application.use_cases.get_ticket import GetTicketUseCase
 from app.application.use_cases.list_tickets import ListTicketsUseCase
+from app.application.use_cases.read_cache import (
+    invalidate_ticket_reads,
+    tickets_list_cache,
+    workbench_cache,
+)
 from app.application.use_cases.review_triage_decision import ReviewTriageDecisionUseCase
 from app.application.use_cases.save_triage_decision import SaveTriageDecisionUseCase
 from app.application.use_cases.triage_ticket import TriageTicketUseCase
@@ -481,6 +486,9 @@ def triage_ticket(
     )
     result = use_case.execute(ticket)
 
+    invalidate_ticket_reads()
+    analytics_cache.invalidate()
+
     return TriageResponse(
         ticket_id=result.ticket_id,
         analysis=_to_analysis_response(result.analysis, result.prioritization),
@@ -512,6 +520,9 @@ def triage_ticket_with_llm(
     except Exception as error:
         logger.exception("LLM triage failed")
         raise HTTPException(status_code=502, detail="LLM-backed triage is currently unavailable.") from error
+
+    invalidate_ticket_reads()
+    analytics_cache.invalidate()
 
     return TriageResponse(
         ticket_id=result.ticket_id,
@@ -580,9 +591,10 @@ def review_triage_decision(
     updated_record = save_use_case.execute(request.ticket_id, decision)
 
     # A new reviewed ticket changes every distribution the analytics
-    # endpoint exposes — drop the cached snapshot so the next /analytics
-    # call recomputes.
+    # endpoint exposes AND mutates the workbench rows — drop both caches
+    # so the next read recomputes against the fresh DB state.
     analytics_cache.invalidate()
+    invalidate_ticket_reads()
 
     return _to_decision_response(updated_record.ticket.id, updated_record.decision)
 
@@ -608,6 +620,9 @@ def assign_ticket(
     assign_use_case = AssignTicketUseCase(repository=repository)
     updated_record = assign_use_case.execute(request.ticket_id, assignment)
 
+    invalidate_ticket_reads()
+    analytics_cache.invalidate()
+
     return _to_assignment_response(updated_record.ticket.id, updated_record.assignment)
 
 
@@ -632,6 +647,9 @@ def update_ticket_status(
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail="Invalid status") from error
+
+    invalidate_ticket_reads()
+    analytics_cache.invalidate()
 
     return _to_status_update_response(
         updated_record.ticket.id,
@@ -663,6 +681,8 @@ def add_ticket_comment(
     except ValueError as error:
         raise HTTPException(status_code=400, detail="Comment body must not be empty") from error
 
+    invalidate_ticket_reads()
+
     return _to_comment_response(request)
 
 
@@ -689,6 +709,9 @@ def escalate_ticket(
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+    invalidate_ticket_reads()
+    analytics_cache.invalidate()
 
     return _to_escalation_response(
         ticket_id=updated_record.ticket.id,
@@ -742,9 +765,15 @@ def get_dashboard_analytics(
 def list_tickets(
     repository: TicketRepositoryDep,
 ) -> list[TicketRecordResponse]:
-    use_case = ListTicketsUseCase(repository=repository)
-    records = use_case.execute()
-    return [_to_ticket_record_response(record) for record in records]
+    # 30 s cache: the dashboard / overview hits this on every nav.
+    # Render Free + Neon Free have cold-starts; without this each tab
+    # switch is a 1–3 s wait on a DB that just went idle.
+    def _compute():
+        use_case = ListTicketsUseCase(repository=repository)
+        records = use_case.execute()
+        return [_to_ticket_record_response(record) for record in records]
+
+    return tickets_list_cache.get_or_compute("all", _compute)
 
 
 @router.get("/workbench", response_model=TicketListResponse)
@@ -762,47 +791,68 @@ def list_tickets_workbench(
     page_size: int = Query(default=20, ge=1, le=100),
     operator: str | None = Query(default=None),
 ) -> TicketListResponse:
-    use_case = ListTicketsUseCase(repository=repository)
-    records = use_case.execute()
-    items = [_to_ticket_list_item_response(record) for record in records]
-    facets = _build_ticket_list_facets(items)
+    # Cache keyed by the exact param combo so different sort/filter/page
+    # views don't share the same slot. 15 s TTL — short enough that a
+    # bulk-action reviewer sees their own edits via cache invalidation
+    # below, long enough to make tab-hopping feel instant.
+    cache_key = (
+        q,
+        view,
+        status,
+        priority,
+        department,
+        source,
+        sort_by,
+        sort_dir,
+        page,
+        page_size,
+        operator,
+    )
 
-    filtered_items = [
-        item
-        for item in items
-        if _matches_ticket_view(item, view=view, operator=operator)
-        and _matches_ticket_filters(
-            item,
-            q=q,
-            status=status,
-            priority=priority,
-            department=department,
-            source=source,
+    def _compute() -> TicketListResponse:
+        use_case = ListTicketsUseCase(repository=repository)
+        records = use_case.execute()
+        items = [_to_ticket_list_item_response(record) for record in records]
+        facets = _build_ticket_list_facets(items)
+
+        filtered_items = [
+            item
+            for item in items
+            if _matches_ticket_view(item, view=view, operator=operator)
+            and _matches_ticket_filters(
+                item,
+                q=q,
+                status=status,
+                priority=priority,
+                department=department,
+                source=source,
+            )
+        ]
+
+        reverse = _normalize(sort_dir) != "asc"
+        sorted_items = sorted(
+            filtered_items,
+            key=lambda item: _ticket_sort_value(item, sort_by),
+            reverse=reverse,
         )
-    ]
 
-    reverse = _normalize(sort_dir) != "asc"
-    sorted_items = sorted(
-        filtered_items,
-        key=lambda item: _ticket_sort_value(item, sort_by),
-        reverse=reverse,
-    )
+        total = len(sorted_items)
+        total_pages = max(1, ceil(total / page_size)) if total else 1
+        current_page = min(page, total_pages)
+        start_index = (current_page - 1) * page_size
+        end_index = start_index + page_size
 
-    total = len(sorted_items)
-    total_pages = max(1, ceil(total / page_size)) if total else 1
-    current_page = min(page, total_pages)
-    start_index = (current_page - 1) * page_size
-    end_index = start_index + page_size
+        return TicketListResponse(
+            items=sorted_items[start_index:end_index],
+            total=total,
+            page=current_page,
+            page_size=page_size,
+            total_pages=total_pages,
+            view=view,
+            facets=facets,
+        )
 
-    return TicketListResponse(
-        items=sorted_items[start_index:end_index],
-        total=total,
-        page=current_page,
-        page_size=page_size,
-        total_pages=total_pages,
-        view=view,
-        facets=facets,
-    )
+    return workbench_cache.get_or_compute(cache_key, _compute)
 
 
 @router.get("/{ticket_id}", response_model=TicketRecordResponse)

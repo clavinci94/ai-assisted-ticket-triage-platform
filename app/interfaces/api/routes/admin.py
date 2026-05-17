@@ -8,6 +8,7 @@ from app.application.use_cases.analytics_cache import analytics_cache
 from app.application.use_cases.backfill_prioritization import (
     BackfillPrioritizationUseCase,
 )
+from app.application.use_cases.read_cache import invalidate_ticket_reads
 from app.application.use_cases.retrain_model import RetrainModelUseCase
 from app.infrastructure.ai.policy_based_prioritizer import PolicyBasedPrioritizer
 from app.infrastructure.ai.tfidf_similar_tickets import TfidfSimilarTicketsAdapter
@@ -130,6 +131,7 @@ def seed_demo_corpus(
         indexed = None
 
     analytics_cache.invalidate()
+    invalidate_ticket_reads()
 
     return SeedDemoResponse(
         status=result["status"],
@@ -193,6 +195,7 @@ def backfill_prioritization(
         raise HTTPException(status_code=500, detail="Prioritization backfill failed.") from exc
 
     analytics_cache.invalidate()
+    invalidate_ticket_reads()
 
     return BackfillPrioritizationResponse(
         status="ok",
