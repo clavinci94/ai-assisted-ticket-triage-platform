@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.application.dto.ticket_record import TicketRecord
 from app.application.ports.ticket_repository_port import TicketRepositoryPort
@@ -247,7 +247,14 @@ class SQLiteTicketRepository(TicketRepositoryPort):
         return self._to_domain_record(db_record)
 
     def list_tickets(self) -> list[TicketRecord]:
-        db_records = self.session.query(TicketRecordModel).all()
+        # Eager-load the events relationship so building 91 domain records
+        # doesn't fire 91 separate "SELECT * FROM ticket_events WHERE
+        # ticket_id = ?" queries (which on Neon adds ~150 ms each and
+        # turns a single /tickets call into 14 s of round-trips).
+        # selectinload uses a single follow-up "WHERE ticket_id IN (...)".
+        db_records = (
+            self.session.query(TicketRecordModel).options(selectinload(TicketRecordModel.events)).all()
+        )
         return [self._to_domain_record(record) for record in db_records]
 
     def _get_db_record(self, ticket_id: str) -> TicketRecordModel:
