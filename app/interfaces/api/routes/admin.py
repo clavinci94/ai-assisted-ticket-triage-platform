@@ -1,5 +1,4 @@
 import logging
-import os
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,11 +8,7 @@ from app.application.use_cases.analytics_cache import analytics_cache
 from app.application.use_cases.backfill_prioritization import (
     BackfillPrioritizationUseCase,
 )
-from app.application.use_cases.read_cache import (
-    invalidate_ticket_reads,
-    tickets_list_cache,
-    workbench_cache,
-)
+from app.application.use_cases.read_cache import invalidate_ticket_reads
 from app.application.use_cases.retrain_model import RetrainModelUseCase
 from app.infrastructure.ai.policy_based_prioritizer import PolicyBasedPrioritizer
 from app.infrastructure.ai.tfidf_similar_tickets import TfidfSimilarTicketsAdapter
@@ -213,35 +208,3 @@ def backfill_prioritization(
             f"({result.failed} failed, {result.skipped} skipped)."
         ),
     )
-
-
-@router.get("/_diagnostics/cache")
-def cache_diagnostics() -> dict:
-    """Read-only probe — reports cache state + process id.
-
-    Hit twice from the same client; if ``process_id`` differs between
-    calls the service is running multiple worker processes (the
-    in-memory caches don't help in that topology). If ``process_id``
-    matches but ``entries`` stays 0 across calls, the cache logic is
-    broken. If ``entries`` grows, the cache works.
-    """
-
-    return {
-        "process_id": os.getpid(),
-        "tickets_list_cache": {
-            "id": id(tickets_list_cache),
-            "ttl_seconds": tickets_list_cache._ttl,
-            "entry_count": len(tickets_list_cache._entries),
-            "keys": [repr(k)[:80] for k in tickets_list_cache._entries],
-        },
-        "workbench_cache": {
-            "id": id(workbench_cache),
-            "ttl_seconds": workbench_cache._ttl,
-            "entry_count": len(workbench_cache._entries),
-        },
-        "analytics_cache": {
-            "id": id(analytics_cache),
-            "has_value": analytics_cache._value is not None,
-            "ttl_seconds": analytics_cache._ttl,
-        },
-    }
