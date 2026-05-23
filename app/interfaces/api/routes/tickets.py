@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from starlette.requests import Request as StarletteRequest
 
+from app.application.ports.notification_port import NotificationPort
 from app.application.ports.similar_tickets_port import SimilarTicketsPort
 from app.application.use_cases.add_ticket_comment import AddTicketCommentUseCase
 from app.application.use_cases.analytics_cache import analytics_cache
@@ -32,6 +33,7 @@ from app.infrastructure.ai.rag_assisted_classifier import RagAssistedClassifier
 from app.infrastructure.persistence.sqlite_ticket_repository import SQLiteTicketRepository
 from app.interfaces.api.dependencies import (
     get_db_session,
+    get_notifier,
     get_similar_tickets,
     get_ticket_repository,
 )
@@ -460,6 +462,7 @@ def repository_dependency(
 
 TicketRepositoryDep = Annotated[SQLiteTicketRepository, Depends(repository_dependency)]
 SimilarTicketsDep = Annotated[SimilarTicketsPort, Depends(get_similar_tickets)]
+NotifierDep = Annotated[NotificationPort, Depends(get_notifier)]
 
 
 def _build_rag_classifier(similar_tickets: SimilarTicketsPort) -> RagAssistedClassifier:
@@ -690,6 +693,7 @@ def add_ticket_comment(
 def escalate_ticket(
     request: TicketEscalationRequest,
     repository: TicketRepositoryDep,
+    notifier: NotifierDep,
 ) -> TicketEscalationResponse:
     get_use_case = GetTicketUseCase(repository=repository)
     record = get_use_case.execute(request.ticket_id)
@@ -698,7 +702,7 @@ def escalate_ticket(
         raise HTTPException(status_code=404, detail="Ticket not found")
 
     try:
-        use_case = EscalateTicketUseCase(repository=repository)
+        use_case = EscalateTicketUseCase(repository=repository, notifier=notifier)
         updated_record = use_case.execute(
             ticket_id=request.ticket_id,
             escalated_by=request.escalated_by,

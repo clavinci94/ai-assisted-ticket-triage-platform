@@ -10,6 +10,7 @@ Superseded decisions stay in the list with status `Superseded by ADR N`.
 | [0002](./0002-litellm-for-triage.md) | LiteLLM proxy for AI-assisted triage | Accepted |
 | [0003](./0003-test-pyramid.md) | Three-layer test pyramid (unit / integration / E2E) | Accepted |
 | [0004](./0004-retrieval-augmented-triage.md) | Retrieval-augmented triage via TF-IDF decorator | Accepted |
+| [0005](./0005-outbound-escalation-notifications.md) | Outbound escalation notifications via a notifier port | Accepted |
 
 ## Writing a new ADR
 

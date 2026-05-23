@@ -68,7 +68,7 @@ The result is a system that gets better the more it's used, surfaces self-servic
 - **Reporting hub** — KPI summaries, department and team analysis, SLA monitoring, backlog development, top-assignee and processing-time metrics — plus a dedicated KE-prioritization analytics block
 - **Hexagonal architecture** — domain layer is pure Python with no framework imports; SQLite, Postgres, the LLM, and the prioritization policy are all swappable adapters
 - **Full CI/CD** — ruff + pytest (75% gate) + Vitest + ESLint + Vite build + Playwright E2E + bandit + pip-audit + npm audit, all on every push
-- **Operational essentials** — health and readiness probes, structured JSON logging with `X-Request-ID` correlation, optional API-key auth, multi-stage Docker, Render blueprint
+- **Operational essentials** — health and readiness probes, structured JSON logging with `X-Request-ID` correlation, optional API-key auth, optional outbound escalation notifications (Discord webhook, [ADR 0005](./docs/adr/0005-outbound-escalation-notifications.md)), multi-stage Docker, Render blueprint
 - **German-localized frontend** for internal Swiss bank/operations contexts
 
 ---
@@ -511,6 +511,8 @@ LITELLM_MODEL=azure_ai/gpt-oss-120b
 | `LOG_LEVEL` | `DEBUG` / `INFO` / `WARNING`. JSON-line output. |
 | `CORS_ALLOW_ORIGINS` | Comma-separated allow-list (defaults to localhost dev ports) |
 | `CORS_ALLOW_ORIGIN_REGEX` | Pattern for production (e.g. `^https://.*\\.onrender\\.com$`) |
+| `ESCALATION_WEBHOOK_URL` | If set, escalating a ticket POSTs a Discord-formatted message to this incoming-webhook URL. Unset → escalation works but pushes nowhere. |
+| `ESCALATION_WEBHOOK_TIMEOUT_SECONDS` | HTTP timeout for the escalation webhook (default `5`). |
 
 `.env.example` ships the recommended proxy template. `litellm_config.yaml` is only needed if you run your own local LiteLLM proxy.
 
@@ -576,7 +578,7 @@ What I'd do differently next time: start with Pydantic-validated structured outp
 - [ ] Replace TF-IDF with sentence-transformers embeddings + pgvector once the corpus crosses a few thousand reviewed tickets
 - [ ] Per-team SLA targets in reporting
 - [ ] Auto-resolve workflow: when a self-service ticket is detected, send the reporter the runbook link automatically and close as `awaiting-self-service`
-- [ ] Webhook outbound integration (Slack / Teams) for escalations
+- [x] Webhook outbound integration for escalations — Discord webhook adapter behind a `NotificationPort` ([ADR 0005](./docs/adr/0005-outbound-escalation-notifications.md)); Slack / Teams are a single additional adapter
 - [ ] API-key auth for `/admin/*` endpoints (currently open)
 
 ---
