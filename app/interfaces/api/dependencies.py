@@ -4,7 +4,11 @@ from collections.abc import Generator
 from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.application.ports.notification_port import NotificationPort
 from app.application.ports.similar_tickets_port import SimilarTicketsPort
+from app.infrastructure.config.settings import get_settings
+from app.infrastructure.notifications.discord_webhook_notifier import DiscordWebhookNotifier
+from app.infrastructure.notifications.null_notifier import NullNotifier
 from app.infrastructure.persistence.db import SessionLocal
 from app.infrastructure.persistence.sqlite_ticket_repository import SQLiteTicketRepository
 
@@ -33,6 +37,23 @@ def get_similar_tickets(request: Request) -> SimilarTicketsPort:
     wasteful and non-deterministic under load.
     """
     return request.app.state.similar_tickets
+
+
+def get_notifier() -> NotificationPort:
+    """Pick the outbound notifier from configuration.
+
+    If ``ESCALATION_WEBHOOK_URL`` is set, escalations are pushed to that
+    Discord webhook; otherwise a NullNotifier makes escalation a silent,
+    network-free no-op. Selecting the adapter by config keeps the
+    notification channel a deployment concern, not a code change (ADR 0005).
+    """
+    settings = get_settings()
+    if settings.escalation_webhook_url:
+        return DiscordWebhookNotifier(
+            settings.escalation_webhook_url,
+            timeout_seconds=settings.escalation_webhook_timeout_seconds,
+        )
+    return NullNotifier()
 
 
 def require_admin_api_key(request: Request) -> None:
