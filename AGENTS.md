@@ -192,6 +192,7 @@ interfaces    ← FastAPI routes, Pydantic schemas, mappers
 | `SimilarTicketsPort` | `app/application/ports/similar_tickets_port.py` | `TfidfSimilarTicketsAdapter` |
 | `PrioritizationPort` | `app/application/ports/prioritization_port.py` | `PolicyBasedPrioritizer` |
 | `TicketRepositoryPort` | `app/application/ports/ticket_repository_port.py` | `SQLiteTicketRepository` (also serves Postgres) |
+| `NotificationPort` | `app/application/ports/notification_port.py` | `DiscordWebhookNotifier`, `NullNotifier` |
 
 ### Use cases
 
@@ -375,6 +376,7 @@ When the user gives you a task that touches one of these areas, read the corresp
 | [0002](./docs/adr/0002-hexagonal-architecture.md) | Hexagonal layering and the dependency-arrow rule |
 | [0003](./docs/adr/0003-litellm-as-llm-gateway.md) | LiteLLM as the single LLM gateway (avoid lock-in) |
 | [0004](./docs/adr/0004-retrieval-augmented-triage.md) | RAG with TF-IDF over reviewed tickets; rejected sentence-transformers / pgvector / agent loops |
+| [0005](./docs/adr/0005-outbound-escalation-notifications.md) | Outbound escalation notifications behind a NotificationPort; Discord adapter, best-effort delivery |
 
 When you make a non-obvious architectural choice, write an ADR rather than burying the rationale in a commit message.
 
