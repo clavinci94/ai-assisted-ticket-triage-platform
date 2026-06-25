@@ -15,5 +15,5 @@ sqlalchemy~=2.0.0
 joblib~=1.5.0
 litellm~=1.82.0
 psycopg[binary]~=3.3.0
-pyyaml~=6.0.0
+pyyaml~=6.0.3
 slowapi~=0.1.9
